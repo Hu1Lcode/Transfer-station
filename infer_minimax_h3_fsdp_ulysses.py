@@ -81,25 +81,40 @@ def fsdp_shard_module(module, blocks, mesh, device, shard_root=True, offload_pol
         all-gather 上卡、用完 reshard 回 CPU，把权重显存腾空。用于 Qwen3-VL——它只在
         denoise loop 前做一次 prompt encode，之后再不被调用，offload 后能给 transformer
         让出权重等量的显存。
+
+    注意：CPUOffloadPolicy 是硬性要求——被 shard 的参数必须先在 CPU 上 materialize
+    （`_validate_cpu_offload_params` 会检查 `sharded_param.device.type == "cpu"`）。所以
+    offload 路径不能 `.to(device)`，必须让参数留 CPU，fully_shard 后 sharded_param 即在
+    CPU、forward 时才 H2D 上卡。非 offload 路径相反：要把每块先 `.to(device)` 让 shard
+    在 GPU 上完成，避免 forward all-gather 时 CPU->GPU 的拷贝。
     """
     module.requires_grad_(False)
     fsdp_kwargs = dict(mesh=mesh)
     if offload_policy is not None:
         fsdp_kwargs["offload_policy"] = offload_policy
 
-    # 关键：逐块上卡 + 立即 fully_shard。每块上卡后随即被切成 1/world_size 的 sharded 参数，
-    # 单卡峰值 = 一个 block 的大小，而不是整个 module（transformer 61.7GB / Qwen3-VL 62GB
-    # 全量上单卡必爆显存）。CPUOffloadPolicy 在 fully_shard 时会把 sharded 参数落 CPU，
-    # 与参数初始位置无关，所以逐块路径同样适用 offload 场景。
-    for block in blocks:
-        block.to(device)
-        fully_shard(block, **fsdp_kwargs)
-    # 其余未分片参数（embed/norm/head 等）整体上卡。这些相比 block stack 小得多，
-    # 上卡不会爆；offload_policy 不覆盖它们（offload 只管 sharded 参数）。
-    module.to(device)
-    if shard_root:
-        # 根模块再 shard 一次，覆盖不属于任何 block 的参数（embed/norm/head 等）
-        fully_shard(module, **fsdp_kwargs)
+    if offload_policy is not None:
+        # CPU offload 路径：参数全程留 CPU，绝不 .to(device)。
+        # from_pretrained 默认加载到 CPU，满足 _validate_cpu_offload_params 的硬性要求
+        # （sharded_param.device.type == "cpu"）。fully_shard 后 sharded 参数留 CPU，
+        # forward 时 FSDP 自行 H2D all-gather 上卡、用完 reshard 回 CPU。
+        # 未分片参数（embed/visual/lm_head 等）也留 CPU——prompt encode 只跑一次，
+        # transformers 会按需把激活传到 GPU（输入已在 GPU），慢一点但不会爆显存，
+        # 也不破坏 sharded 状态（fully_shard 之后调 .to() 会搬动 DTensor 触发验证错误）。
+        for block in blocks:
+            fully_shard(block, **fsdp_kwargs)
+        if shard_root:
+            fully_shard(module, **fsdp_kwargs)
+    else:
+        # 非 offload 路径：逐块上卡 + 立即 fully_shard，每块上卡后随即被切成 1/world_size，
+        # 单卡峰值 = 一个 block 的大小，而不是整个 module（transformer 61.7GB / Qwen3-VL
+        # 62GB 全量上单卡必爆显存）。
+        for block in blocks:
+            block.to(device)
+            fully_shard(block, **fsdp_kwargs)
+        module.to(device)  # 其余未分片参数（embed/norm/head 等）整体上卡
+        if shard_root:
+            fully_shard(module, **fsdp_kwargs)
     return module
 
 

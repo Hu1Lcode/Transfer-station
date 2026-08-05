@@ -87,12 +87,16 @@ def fsdp_shard_module(module, blocks, mesh, device, shard_root=True, offload_pol
     if offload_policy is not None:
         fsdp_kwargs["offload_policy"] = offload_policy
 
-    # 先把整个 module 搬上卡：FSDP2 的 DTensor sharding 要求参数在目标 device 上初始化，
-    # 才能按 mesh 切分。CPU offload policy 在 fully_shard 之后自行管理 sharded 参数的
-    # H2D/D2H（forward 前 all-gather 上卡、用完 reshard 回 CPU），我们不再手动 .to()。
-    module.to(device)
+    # 关键：逐块上卡 + 立即 fully_shard。每块上卡后随即被切成 1/world_size 的 sharded 参数，
+    # 单卡峰值 = 一个 block 的大小，而不是整个 module（transformer 61.7GB / Qwen3-VL 62GB
+    # 全量上单卡必爆显存）。CPUOffloadPolicy 在 fully_shard 时会把 sharded 参数落 CPU，
+    # 与参数初始位置无关，所以逐块路径同样适用 offload 场景。
     for block in blocks:
+        block.to(device)
         fully_shard(block, **fsdp_kwargs)
+    # 其余未分片参数（embed/norm/head 等）整体上卡。这些相比 block stack 小得多，
+    # 上卡不会爆；offload_policy 不覆盖它们（offload 只管 sharded 参数）。
+    module.to(device)
     if shard_root:
         # 根模块再 shard 一次，覆盖不属于任何 block 的参数（embed/norm/head 等）
         fully_shard(module, **fsdp_kwargs)

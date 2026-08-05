@@ -20,6 +20,8 @@ MiniMax-H3 四卡推理脚本：FSDP2（权重分片） + Ulysses 序列并行�
   pip install -U "transformers" accelerate safetensors av
   # 可选：flash-attn（装好后用 --attn_backend flash 提速，SDPA 后端无需安装）
 
+  # 昇腾 NPU：把 torch_npu 装上后无需改任何代码/参数——脚本 import 到 torch_npu 即自动
+  # 切到 npu 设备 + hccl 后端；没装则回落 CUDA。即安装 torch_npu 后就能跑。
 启动（单机 4 卡）：
   # t2va：文本 -> 视频+音频
   torchrun --nproc_per_node=4 infer_minimax_h3_fsdp_ulysses.py \
@@ -57,6 +59,19 @@ import torch
 import torch.distributed as dist
 from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import CPUOffloadPolicy, fully_shard, OffloadPolicy
+
+# --- 设备后端自适应：有 torch_npu 走昇腾（npu/hccl），否则走 CUDA/cuda/nccl ---
+# 用法：NPU 机器上 pip install torch_npu 后，脚本顶部已 `import torch_npu`（见下方），
+# 这里探测到 npu 后端即把 device str / 分布式 backend / xpu 工具切到 npu/hccl。
+try:
+    import torch_npu  # noqa: F401  注册 npu 设备，必须在用 npu 之前 import
+    _DEVICE = "npu"
+    _DIST_BACKEND = "hccl"
+    _xpu = torch.npu
+except ImportError:
+    _DEVICE = "cuda"
+    _DIST_BACKEND = "nccl"
+    _xpu = torch.cuda
 
 from diffusers import (
     ContextParallelConfig,
@@ -329,10 +344,10 @@ def main():
     if world_size < 2:
         raise RuntimeError("请用 torchrun 以多卡启动，例如 torchrun --nproc_per_node=4 ...")
 
-    dist.init_process_group(backend="nccl")
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
-    fsdp_mesh = init_device_mesh("cuda", (world_size,), mesh_dim_names=("fsdp",))
+    dist.init_process_group(backend=_DIST_BACKEND)
+    _xpu.set_device(local_rank)
+    device = torch.device(_DEVICE, local_rank)
+    fsdp_mesh = init_device_mesh(_DEVICE, (world_size,), mesh_dim_names=("fsdp",))
 
     if rank == 0:
         print(f"[setup] world_size={world_size}, device={device}, workflow={args.workflow}", flush=True)
@@ -350,7 +365,7 @@ def main():
     )
     fsdp_shard_module(transformer, transformer.transformer_blocks, fsdp_mesh, device)
     gc.collect()
-    torch.cuda.empty_cache()
+    _xpu.empty_cache()
 
     # 3) Ulysses SP：ulysses_anything 支持任意打包序列长度；cp_plan 传空 dict —
     #    边界分片由 UlyssesBoundarySharder 处理，这里只要 dispatcher 的 all-to-all
@@ -385,7 +400,7 @@ def main():
             flush=True,
         )
     gc.collect()
-    torch.cuda.empty_cache()
+    _xpu.empty_cache()
 
     # 5) 注入已分片的组件，再加载其余共享组件（VAE / 音频 VAE / tokenizer / processor / scheduler）
     pipe.update_components(**{subfolder: transformer, "text_encoder": text_encoder})
@@ -394,7 +409,7 @@ def main():
     pipe.audio_vae.to(device)
     dist.barrier()
     if rank == 0:
-        print(f"[setup] 加载完成，rank0 显存占用 {torch.cuda.max_memory_allocated() / 2**30:.1f} GiB", flush=True)
+        print(f"[setup] 加载完成，rank0 显存占用 {_xpu.max_memory_allocated() / 2**30:.1f} GiB", flush=True)
 
     # 6) 组装请求
     call_kwargs = dict(

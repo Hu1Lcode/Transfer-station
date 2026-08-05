@@ -26,6 +26,11 @@ MiniMax-H3 四卡推理脚本：FSDP2（权重分片） + Ulysses 序列并行�
       --prompt "A red fox trotting through a snowy pine forest, snow crunching underfoot" \
       --num_frames 124 --output minimax_h3_t2va.mp4
 
+  # 若 Qwen3-VL 占显存太多，加 --offload_text_encoder 把它的 sharded 权重常驻 CPU，
+  # 只在 prompt encode 时临时 H2D 上卡，编码完即 reshard 回 CPU，腾出显存给 transformer：
+  torchrun --nproc_per_node=4 infer_minimax_h3_fsdp_ulysses.py \
+      --prompt "..." --num_frames 124 --offload_text_encoder --output out.mp4
+
   # fl2va：首帧（可含尾帧）引导，与 t2va 共用同一份 transformer 权重
   torchrun --nproc_per_node=4 infer_minimax_h3_fsdp_ulysses.py \
       --prompt "..." --image keyframe.jpg --num_frames 124 --output out.mp4
@@ -51,7 +56,7 @@ import time
 import torch
 import torch.distributed as dist
 from torch.distributed.device_mesh import init_device_mesh
-from torch.distributed.fsdp import fully_shard
+from torch.distributed.fsdp import CPUOffloadPolicy, fully_shard, OffloadPolicy
 
 from diffusers import (
     ContextParallelConfig,
@@ -66,20 +71,31 @@ from transformers import Qwen3VLForConditionalGeneration
 # ---------------------------------------------------------------------------
 # FSDP2 权重分片
 # ---------------------------------------------------------------------------
-def fsdp_shard_module(module, blocks, mesh, device, shard_root=True):
+def fsdp_shard_module(module, blocks, mesh, device, shard_root=True, offload_policy=None):
     """按 block 分片 module：逐块搬上 GPU 后 fully_shard，瞬时只占一块整权重。
 
     FSDP2 在前向时逐块 all-gather 出完整权重、用完即 reshard，因此显存峰值约为
     “全量 1/world_size + 1~2 个完整 block”。
+
+    offload_policy: 传 CPUOffloadPolicy() 时，sharded 权重常驻 CPU，forward 前 H2D
+        all-gather 上卡、用完 reshard 回 CPU，把权重显存腾空。用于 Qwen3-VL——它只在
+        denoise loop 前做一次 prompt encode，之后再不被调用，offload 后能给 transformer
+        让出权重等量的显存。
     """
     module.requires_grad_(False)
+    fsdp_kwargs = dict(mesh=mesh)
+    if offload_policy is not None:
+        fsdp_kwargs["offload_policy"] = offload_policy
+
+    # 先把整个 module 搬上卡：FSDP2 的 DTensor sharding 要求参数在目标 device 上初始化，
+    # 才能按 mesh 切分。CPU offload policy 在 fully_shard 之后自行管理 sharded 参数的
+    # H2D/D2H（forward 前 all-gather 上卡、用完 reshard 回 CPU），我们不再手动 .to()。
+    module.to(device)
     for block in blocks:
-        block.to(device)  # 先上卡再分片，避免 CPU 参数 + cuda mesh 的跨设备分发
-        fully_shard(block, mesh=mesh)
-    module.to(device)  # 其余未分片参数（embed/norm/head 等）整体上卡
+        fully_shard(block, **fsdp_kwargs)
     if shard_root:
-        # 根模块再 shard 一次，覆盖不属于任何 block 的参数
-        fully_shard(module, mesh=mesh)
+        # 根模块再 shard 一次，覆盖不属于任何 block 的参数（embed/norm/head 等）
+        fully_shard(module, **fsdp_kwargs)
     return module
 
 
@@ -274,6 +290,12 @@ def parse_args():
         default=0.0,
         help="每个 rank 加载大权重前按 rank*stagger 秒错峰，降低 host 内存瞬时峰值",
     )
+    p.add_argument(
+        "--offload_text_encoder",
+        action="store_true",
+        help="把 Qwen3-VL 文本条件器的 sharded 权重常驻 CPU RAM——它只在 denoise loop 前做一次 "
+        "prompt encode，用完即腾空显存，给 transformer 让出约 1/world_size × 62 GB 的显存",
+    )
     return p.parse_args()
 
 
@@ -321,17 +343,28 @@ def main():
     )
     UlyssesBoundarySharder(transformer, world_size, rank)
 
-    # 4) Qwen3-VL 文本条件器：decoder layer 逐块分片；embed/visual/lm_head 保持复制
+    # 4) Qwen3-VL 文本条件器：decoder layer 逐块分片；embed/visual/lm_head 保持复制。
+    #    --offload_text_encoder 时给 sharded 参数挂 CPUOffloadPolicy：常驻 CPU RAM，
+    #    prompt encode 时逐层 H2D all-gather 上卡、用完 reshard 回 CPU，
+    #    把约 1/world_size × 62 GB 显存腾给后续 transformer denoise loop。
     text_encoder = Qwen3VLForConditionalGeneration.from_pretrained(
         args.model_id, subfolder="text_encoder", dtype=torch.bfloat16
     )
+    text_encoder_offload = CPUOffloadPolicy() if args.offload_text_encoder else None
     fsdp_shard_module(
         text_encoder,
         get_qwen3vl_decoder_layers(text_encoder),
         fsdp_mesh,
         device,
         shard_root=False,
+        offload_policy=text_encoder_offload,
     )
+    if rank == 0:
+        print(
+            f"[setup] text_encoder offload: "
+            f"{'CPU (sharded 权重常驻 CPU, prompt encode 时按需 H2D)' if text_encoder_offload else 'no (常驻 GPU)'}",
+            flush=True,
+        )
     gc.collect()
     torch.cuda.empty_cache()
 

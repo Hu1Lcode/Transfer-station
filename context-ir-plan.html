@@ -356,10 +356,10 @@
 <div class="header">
   <div class="container">
     <h1>MiniMax H3-Context-IR 复现方案</h1>
-    <div class="subtitle">6 步简化流水线 · 本地预处理 + API 模型调用 · 零 GPU 部署</div>
+    <div class="subtitle">6 步简化流水线 · Qwen3.6 + DeepSeek-R1 API · 零 GPU 部署</div>
     <div class="meta">
       <span>流水线步数: 6</span>
-      <span>API 模型: 3</span>
+      <span>API 模型: 2</span>
       <span>本地 GPU: 0</span>
       <span>预估工期: 11 天</span>
     </div>
@@ -428,21 +428,21 @@ skills/h3-prompt-writing/
           <td>语义提取</td>
           <td><span class="tag tag-vl">多模态</span></td>
           <td>中</td>
-          <td><code>Qwen3-VL-32B API</code></td>
+          <td><code>qwen3.6-plus API</code></td>
         </tr>
         <tr>
           <td><strong>Step 2</strong></td>
           <td>跨模态关联</td>
-          <td><span class="tag tag-text">纯文本</span></td>
+          <td><span class="tag tag-text">文本/多模态*</span></td>
           <td>中</td>
-          <td><code>Qwen3-32B API</code></td>
+          <td><code>qwen3.6 API</code></td>
         </tr>
         <tr>
           <td><strong>Step 3</strong></td>
           <td>Shot 分割与描述</td>
           <td><span class="tag tag-text">纯文本*</span></td>
           <td>中</td>
-          <td><code>Qwen3-32B API</code></td>
+          <td><code>qwen3.6 API</code></td>
         </tr>
         <tr>
           <td><strong>Step 4</strong></td>
@@ -456,11 +456,11 @@ skills/h3-prompt-writing/
           <td>格式化输出</td>
           <td><span class="tag tag-text">纯文本</span></td>
           <td>低</td>
-          <td><code>Qwen3-32B API</code></td>
+          <td><code>qwen3.6 API</code></td>
         </tr>
       </tbody>
     </table>
-    <p style="font-size:0.85em;color:var(--text-secondary);">* Step 3 默认纯文本；若 Step 1 的视觉描述信息不足，可升级为 Qwen3-VL-32B API 回看关键帧。</p>
+    <p style="font-size:0.85em;color:var(--text-secondary);">* Step 2 默认基于 Step 1 语义描述做文本对齐，必要时可回看原始媒体；Step 3 默认纯文本，若视觉描述信息不足可回看关键帧。</p>
 
     <div class="card-grid">
       <div class="card">
@@ -468,15 +468,15 @@ skills/h3-prompt-writing/
         <div class="card-desc">输入类型决定任务类型：仅文本 = T2VA；文本+图片 = I2VA；文本+图片+视频+音频 = FL2VA/Ref2VA。纯规则判断，零成本。</div>
       </div>
       <div class="card">
-        <div class="card-title"><span class="badge badge-green">Step 1</span> Qwen3-VL-32B API</div>
-        <div class="card-desc">语义提取。与 H3-Encoder 同源模型，一次调用同时理解图片/视频帧/音频。音频可先经本地预处理器转为文本描述再喂入，也可直接传 audio。</div>
+        <div class="card-title"><span class="badge badge-green">Step 1</span> qwen3.6-plus API</div>
+        <div class="card-desc">语义提取。新一代视觉语言模型，一次调用同时理解图片/视频帧。音频经本地预处理器（Whisper + 特征提取）转为文本描述后喂入。</div>
       </div>
       <div class="card">
-        <div class="card-title"><span class="badge badge-blue">Step 2</span> Qwen3-32B API</div>
-        <div class="card-desc">跨模态关联。基于 Step 1 的语义描述做纯文本对齐：文本引用 ↔ 具体素材，生成 &lt;Subject N&gt; / &lt;Audio N&gt; 标签。</div>
+        <div class="card-title"><span class="badge badge-blue">Step 2</span> qwen3.6 API</div>
+        <div class="card-desc">跨模态关联。基于 Step 1 的语义描述做对齐，必要时回看原始媒体：文本引用 ↔ 具体素材，生成 &lt;Subject N&gt; / &lt;Audio N&gt; 标签。</div>
       </div>
       <div class="card">
-        <div class="card-title"><span class="badge badge-blue">Step 3</span> Qwen3-32B API</div>
+        <div class="card-title"><span class="badge badge-blue">Step 3</span> qwen3.6 API</div>
         <div class="card-desc">Shot 分割与描述。把生成视频的时间线切分为镜头，逐段描述画面内容、动作、对话、音乐、声音事件。</div>
       </div>
       <div class="card">
@@ -484,7 +484,7 @@ skills/h3-prompt-writing/
         <div class="card-desc">逻辑校验。CoT 推理验证 shot 内容逻辑合理性：主体连续性、时间线因果、音频一致性，Ref2VA 模式下判定 retention 级别。</div>
       </div>
       <div class="card">
-        <div class="card-title"><span class="badge badge-yellow">Step 5</span> Qwen3-32B API</div>
+        <div class="card-title"><span class="badge badge-yellow">Step 5</span> qwen3.6 API</div>
         <div class="card-desc">格式化输出。按官方 base-en.txt / ref-en.txt 模板组装最终结构化 prompt，指令遵循能力强、输出稳定。</div>
       </div>
     </div>
@@ -532,7 +532,7 @@ skills/h3-prompt-writing/
         <div class="step-num">1</div>
         <div class="step-info">
           <div class="step-name">语义提取 (Semantic Extraction)</div>
-          <div class="step-model">Qwen3-VL-32B API · prompt/图像/视频/音频 → 语义描述 (JSON)</div>
+          <div class="step-model">qwen3.6-plus API · prompt/图像/视频/音频 → 语义描述 (JSON)</div>
         </div>
         <div class="step-gpu">API</div>
       </div>
@@ -542,7 +542,7 @@ skills/h3-prompt-writing/
         <div class="step-num">2</div>
         <div class="step-info">
           <div class="step-name">跨模态关联 (Cross-modal Association)</div>
-          <div class="step-model">Qwen3-32B API · 语义描述 → 对齐映射 + Subject/Audio 标签 (JSON)</div>
+          <div class="step-model">qwen3.6 API · 语义描述 → 对齐映射 + Subject/Audio 标签 (JSON)</div>
         </div>
         <div class="step-gpu">API</div>
       </div>
@@ -552,7 +552,7 @@ skills/h3-prompt-writing/
         <div class="step-num">3</div>
         <div class="step-info">
           <div class="step-name">Shot 分割与描述 (Shot Planning)</div>
-          <div class="step-model">Qwen3-32B API · 对齐结果 → 镜头时间线 + 逐段描述 (JSON)</div>
+          <div class="step-model">qwen3.6 API · 对齐结果 → 镜头时间线 + 逐段描述 (JSON)</div>
         </div>
         <div class="step-gpu">API</div>
       </div>
@@ -572,7 +572,7 @@ skills/h3-prompt-writing/
         <div class="step-num">5</div>
         <div class="step-info">
           <div class="step-name">格式化输出 (Structured Output)</div>
-          <div class="step-model">Qwen3-32B API · JSON → 符合官方模板的最终 prompt (Text)</div>
+          <div class="step-model">qwen3.6 API · JSON → 符合官方模板的最终 prompt (Text)</div>
         </div>
         <div class="step-gpu">API</div>
       </div>
@@ -657,7 +657,7 @@ skills/h3-prompt-writing/
     <p>只需遍历输入 content 判断 media_type，<strong>不需要 LLM</strong>，输出任务类型 + 各素材的角色标记（first_frame / reference_video / voice_timbre 等）。</p>
 
     <h3>Step 1: 语义提取</h3>
-    <p><strong>模型</strong>: Qwen3-VL-32B（API）· <strong>输入</strong>: prompt + 预处理结果 · <strong>输出</strong>: 各素材语义描述 (JSON)</p>
+    <p><strong>模型</strong>: qwen3.6-plus（API）· <strong>输入</strong>: prompt + 预处理结果 · <strong>输出</strong>: 各素材语义描述 (JSON)</p>
     <p>从 4 类输入中提取语义，输出 <strong>每个素材独立的结构化描述</strong>（与关联解耦，天然支持并行）：</p>
     <ul>
       <li><strong>prompt</strong> → 任务参数、风格、镜头意图、对话/音效/音乐需求、参考引用关系</li>
@@ -679,7 +679,7 @@ skills/h3-prompt-writing/
 }</pre>
 
     <h3>Step 2: 跨模态关联</h3>
-    <p><strong>模型</strong>: Qwen3-32B（API）· <strong>输入</strong>: Step 1 语义描述（纯文本）· <strong>输出</strong>: 对齐映射 + 标签定义 (JSON)</p>
+    <p><strong>模型</strong>: qwen3.6（API）· <strong>输入</strong>: Step 1 语义描述（必要时回看原始媒体）· <strong>输出</strong>: 对齐映射 + 标签定义 (JSON)</p>
     <p>建立文本 ↔ 素材 ↔ 实体之间的引用关系：</p>
     <ul>
       <li>将文本引用映射到具体素材（"穿粉色西装的男子" → Video 1 中的 Subject）</li>
@@ -702,7 +702,7 @@ skills/h3-prompt-writing/
 }</pre>
 
     <h3>Step 3: Shot 分割与描述</h3>
-    <p><strong>模型</strong>: Qwen3-32B（API）· <strong>输入</strong>: Step 2 输出 + 场景切分结果 · <strong>输出</strong>: 镜头时间线 + 逐段描述 (JSON)</p>
+    <p><strong>模型</strong>: qwen3.6（API）· <strong>输入</strong>: Step 2 输出 + 场景切分结果 · <strong>输出</strong>: 镜头时间线 + 逐段描述 (JSON)</p>
     <p>为待生成视频规划镜头结构，<strong>逐段仔细描述</strong>每段 shot 包含的内容：</p>
     <ul>
       <li><strong>视觉</strong>：镜头起止时间、摄影机运动、构图、过渡、主体动作</li>
@@ -753,7 +753,7 @@ skills/h3-prompt-writing/
 }</pre>
 
     <h3>Step 5: 格式化输出</h3>
-    <p><strong>模型</strong>: Qwen3-32B（API）· <strong>输入</strong>: 全部前序输出（含修正后）· <strong>输出</strong>: 符合官方 <code>base-en.txt</code> / <code>ref-en.txt</code> 模板的最终结构化 prompt (Text)</p>
+    <p><strong>模型</strong>: qwen3.6（API）· <strong>输入</strong>: 全部前序输出（含修正后）· <strong>输出</strong>: 符合官方 <code>base-en.txt</code> / <code>ref-en.txt</code> 模板的最终结构化 prompt (Text)</p>
     <p>这是 Context-IR 的最终输出，直接送入 H3-Base 生成视频。System Prompt 基于官方规范编写，确保格式 100% 对齐。</p>
 
     <h4>输出字段详解（视觉 + 文本 + 音频统一格式）</h4>
@@ -844,18 +844,18 @@ h3-context-ir/
 ├── pipeline/                    # 流水线核心（Step 1-5）
 │   ├── __init__.py
 │   ├── base_pipeline.py         # 流水线基类（阶段编排、重试、缓存）
-│   ├── step1_extractor.py       # 语义提取 (Qwen3-VL-32B API)
-│   ├── step2_associator.py      # 跨模态关联 (Qwen3-32B API)
-│   ├── step3_shot_planner.py    # Shot 分割与描述 (Qwen3-32B API)
+│   ├── step1_extractor.py       # 语义提取 (qwen3.6-plus API)
+│   ├── step2_associator.py      # 跨模态关联 (qwen3.6 API)
+│   ├── step3_shot_planner.py    # Shot 分割与描述 (qwen3.6 API)
 │   ├── step4_validator.py       # 逻辑校验 (DeepSeek-R1 API)
-│   ├── step5_formatter.py       # 格式化输出 (Qwen3-32B API)
+│   ├── step5_formatter.py       # 格式化输出 (qwen3.6 API)
 │   └── context.py               # 阶段间数据传递对象（PipelineContext）
 ├── api/                         # 统一模型 API 客户端
 │   ├── __init__.py
 │   ├── base_client.py           # OpenAI 兼容接口封装（重试/超时/限流）
 │   ├── providers.py             # provider 配置（dashscope / deepseek / openai）
 │   ├── vl_client.py             # 多模态调用（图片/视频/音频 URL 或 Base64）
-│   ├── text_client.py           # 文本模型调用（Qwen3-32B / DeepSeek-R1）
+│   ├── text_client.py           # 文本模型调用（qwen3.6 / DeepSeek-R1）
 │   ├── media_uploader.py        # 媒体文件上传/URL 化（供 API 访问）
 │   └── output_validator.py      # 输出格式校验与自动修复
 ├── server/                      # FastAPI 服务
@@ -881,7 +881,7 @@ h3-context-ir/
         <div class="tl-title">第 1 天：环境准备 + API 接入 <span class="tl-days">1 天</span></div>
         <div class="tl-desc">
           <ul>
-            <li>注册阿里云百炼（DashScope）获取 Qwen3-VL-32B / Qwen3-32B API Key</li>
+            <li>注册阿里云百炼（DashScope）获取 qwen3.6-plus / qwen3.6-flash API Key</li>
             <li>注册 DeepSeek 开放平台获取 R1 API Key</li>
             <li>验证多模态 API 支持：图片/视频/音频 URL 直传能力</li>
             <li>搭建项目骨架 + 编写 <code>collect_official_samples.py</code></li>
@@ -953,13 +953,13 @@ h3-context-ir/
       </thead>
       <tbody>
         <tr><td>跳过 Step 1</td><td>Step 2 直接处理原始输入</td><td>语义提取是否必要</td></tr>
-        <tr><td>Step 1 换小模型</td><td>Qwen3-VL-32B -> Qwen2.5-VL-7B API</td><td>语义提取的模型下限</td></tr>
+        <tr><td>Step 1 换小模型</td><td>qwen3.6-plus -> qwen3.6-flash API</td><td>语义提取的模型下限</td></tr>
         <tr><td>跳过 Step 2</td><td>不做跨模态对齐</td><td>跨模态关联的收益</td></tr>
         <tr><td>跳过 Step 3</td><td>不规划 shot 直接输出</td><td>Shot 分割与描述的必要性</td></tr>
         <tr><td>跳过 Step 4</td><td>不校验逻辑直接组装</td><td>逻辑校验的收益</td></tr>
-        <tr><td>Step 4 换非 R1</td><td>DeepSeek-R1 -> Qwen3-32B</td><td>CoT 推理的增益</td></tr>
+        <tr><td>Step 4 换非 R1</td><td>DeepSeek-R1 -> qwen3.6</td><td>CoT 推理的增益</td></tr>
         <tr><td>跳过 Step 5</td><td>直接输出 JSON</td><td>格式化输出的必要性</td></tr>
-        <tr><td>全部合并为单阶段</td><td>Qwen3-VL-32B 一次调用生成</td><td>多步骤 vs 单步骤对比</td></tr>
+        <tr><td>全部合并为单阶段</td><td>qwen3.6 一次调用生成</td><td>多步骤 vs 单步骤对比</td></tr>
         <tr><td>音频特征跳过</td><td>只用 Whisper 转写，不做音源分离/特征提取</td><td>音频分析模块的贡献</td></tr>
       </tbody>
     </table>
@@ -979,8 +979,8 @@ h3-context-ir/
       </thead>
       <tbody>
         <tr><td>本地预处理</td><td>CPU</td><td>帧采样、场景切分、Whisper 转写、Demucs 分离、特征提取</td></tr>
-        <tr><td>Step 1 语义提取</td><td>阿里云百炼</td><td>Qwen3-VL-32B API（多模态，支持图片/视频/音频 URL）</td></tr>
-        <tr><td>Step 2/3/5</td><td>阿里云百炼</td><td>Qwen3-32B API（纯文本）</td></tr>
+        <tr><td>Step 1 语义提取</td><td>阿里云百炼</td><td>qwen3.6-plus API（多模态，支持图片/视频 URL；音频经本地预处理转文本）</td></tr>
+        <tr><td>Step 2/3/5</td><td>阿里云百炼</td><td>qwen3.6-plus 或 qwen3.6-flash API（flash 降低成本）</td></tr>
         <tr><td>Step 4 逻辑校验</td><td>DeepSeek 开放平台</td><td>deepseek-r1 API（CoT 推理）</td></tr>
         <tr><td>媒体传输</td><td>对象存储/临时 URL</td><td>本地文件需转为 API 可访问的 URL（OSS / 临时公网链接）</td></tr>
         <tr><td>存储</td><td>100GB SSD</td><td>示例数据 + 预处理缓存</td></tr>
@@ -993,7 +993,7 @@ h3-context-ir/
         <tr><th>步骤</th><th>输入 token（约）</th><th>输出 token（约）</th><th>费用（约）</th></tr>
       </thead>
       <tbody>
-        <tr><td>Step 1 语义提取 (VL)</td><td>3K（含图像/视频帧编码）</td><td>1K</td><td>¥0.02</td></tr>
+        <tr><td>Step 1 语义提取 (qwen3.6)</td><td>3K（含图像/视频帧编码）</td><td>1K</td><td>¥0.02</td></tr>
         <tr><td>Step 2 跨模态关联</td><td>2K</td><td>1K</td><td>¥0.005</td></tr>
         <tr><td>Step 3 Shot 规划</td><td>3K</td><td>2K</td><td>¥0.008</td></tr>
         <tr><td>Step 4 逻辑校验 (R1)</td><td>4K</td><td>3K（含 CoT）</td><td>¥0.03</td></tr>
@@ -1009,7 +1009,7 @@ h3-context-ir/
     <h2>9. 关键设计决策</h2>
     <ol>
       <li><strong>任务区分规则化</strong>：输入类型直接决定任务类型，无需模型推理，零成本</li>
-      <li><strong>语义提取与关联解耦</strong>：Step 1 只做素材理解（可并行），Step 2 做纯文本对齐，降低关联阶段对多模态模型的需求</li>
+      <li><strong>语义提取与关联解耦，统一 qwen3.6 视觉模型</strong>：Step 1 只做素材理解（可并行），Step 2/3 必要时可回看原始媒体做对齐，模型种类减至 2 个（qwen3.6 + DeepSeek-R1）</li>
       <li><strong>API 调用替代本地推理</strong>：零 GPU 部署，按量付费，开发迭代成本低</li>
       <li><strong>统一 OpenAI 兼容客户端</strong>：<code>base_client.py</code> 抽象 provider，可随时切换 DashScope / DeepSeek / 其他平台</li>
       <li><strong>预处理保留本地</strong>：转写/分离/特征提取没有现成 API 或 API 成本高，本地 CPU 工具链成熟且免费</li>
@@ -1034,20 +1034,20 @@ class PipelineContext:
     # 预处理结果（本地 CPU）
     preprocessed: dict  # {video_frames, scene_changes, audio_analysis}
 
-    # Step 1 (Qwen3-VL-32B API)
+    # Step 1 (qwen3.6-plus API)
     semantic_descriptions: dict  # {prompt_analysis, media_analysis}
 
-    # Step 2 (Qwen3-32B API)
+    # Step 2 (qwen3.6 API)
     cross_modal_mapping: dict  # 跨模态映射
     subject_definitions: list[str]  # &lt;Subject N&gt; / &lt;Audio N&gt; 标签定义
 
-    # Step 3 (Qwen3-32B API)
+    # Step 3 (qwen3.6 API)
     shot_timeline: dict  # 镜头时间线 + 逐段描述（含视觉/音频元素）
 
     # Step 4 (DeepSeek-R1 API)
     validation: dict  # {corrections, retention_analysis, inferred_details, consistency_notes}
 
-    # Step 5 (Qwen3-32B API)
+    # Step 5 (qwen3.6 API)
     final_prompt: str  # 符合官方模板的结构化 prompt</pre>
   </div>
 

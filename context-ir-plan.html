@@ -358,8 +358,9 @@
     <div class="meta">
       <span>阶段数: 5</span>
       <span>模型数: 4</span>
+      <span>音频模块: 6</span>
       <span>硬件: 4x A100-80G</span>
-      <span>预估工期: 18 天</span>
+      <span>预估工期: 20 天</span>
     </div>
   </div>
 </div>
@@ -667,6 +668,185 @@ non_diegetic_music:
     </div>
   </div>
 
+  <!-- 音频处理 -->
+  <div class="section">
+    <h2>5. 音频处理：被忽视的关键维度</h2>
+    
+    <div class="highlight-box info">
+      <strong>H3 的音频能力</strong>：输出 32kHz 原生立体声，H3-AudioVAE 独立处理左右声道，音频 latent 速率 40Hz。
+      在官方输出格式中，<code>overall_soundscape</code> 和 <code>non_diegetic_music</code> 是 Base 模式的 3 个核心字段中的 2 个，
+      Ref2VA 模式还有 <code>&lt;Audio N&gt;</code> 标签体系和音频 retention 分析。音频绝非配角。
+    </div>
+
+    <h3>5.1 音频预处理管线</h3>
+    <p>当前的 <code>audio_transcriber.py</code> 仅做 Whisper 转写远远不够，需要扩展为完整的音频分析管线：</p>
+
+    <table>
+      <thead>
+        <tr><th>模块</th><th>工具/模型</th><th>输出</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>语音转写</td><td>Whisper / SenseVoice</td>
+          <td>带时间戳的文本 + 语种 + 说话人标记</td>
+          <td>对话内容提取、说话人识别</td>
+        </tr>
+        <tr>
+          <td>音源分离</td><td>Demucs / Spleeter</td>
+          <td>分离为: 人声 / BGM / 环境音 / SFX</td>
+          <td>区分 diegetic 音与非 diegetic 音乐</td>
+        </tr>
+        <tr>
+          <td>音乐特征提取</td>
+          <td>librosa / CLAP / Jukebox</td>
+          <td>BPM, 调性, 乐器组成, 风格标签, 响度曲线</td>
+          <td>生成 non_diegetic_music 描述</td>
+        </tr>
+        <tr>
+          <td>声音事件检测</td>
+          <td>YAMNet / AudioSet</td>
+          <td>事件类型 + 时间戳 + 置信度 (脚步声, 门铃, 风声...)</td>
+          <td>生成 overall_soundscape 描述</td>
+        </tr>
+        <tr>
+          <td>音色特征提取</td>
+          <td>SpeechBrain / ECAPA-TDNN</td>
+          <td>说话人 embedding + 音色描述 (低沉/清亮/沙哑)</td>
+          <td>Ref2VA 音频参考映射</td>
+        </tr>
+        <tr>
+          <td>立体声分析</td>
+          <td>librosa</td>
+          <td>左右声道差异、声场宽度、空间感</td>
+          <td>描述立体声特性</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>5.2 音频在各阶段的处理</h3>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">Preprocessor</span> 音频分析管线</div>
+        <div class="card-desc">
+          对每个音频输入进行：音源分离 -> 语音转写 + 音乐特征提取 + 声音事件检测 + 音色提取。<br>
+          输出结构化 JSON 包含所有音频维度的描述信息。
+          <div class="card-model" style="margin-top:8px;">audio_analyzer.py</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">Phase 1</span> 音频指令解析</div>
+        <div class="card-desc">
+          从用户文本中提取：<br>
+          - 对话内容和说话人描述<br>
+          - 音效/环境音需求<br>
+          - 背景音乐风格/情绪要求<br>
+          - 音频参考关系 ("音色参考音频1")
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-green">Phase 2</span> 音频跨模态关联</div>
+        <div class="card-desc">
+          - 将文本引用映射到具体音频文件<br>
+          - 识别音频角色 (voice_timbre / bgm / sfx / ambience)<br>
+          - 生成 &lt;Audio N&gt; 标签定义<br>
+          - 关联说话人声音与 Subject
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-green">Phase 3</span> 音频时序规划</div>
+        <div class="card-desc">
+          - 对话时间点安排<br>
+          - BGM 起止/淡入淡出时间<br>
+          - 声音事件与画面的同步<br>
+          - 镜头切换时的音频过渡
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-red">Phase 4</span> 音频推理</div>
+        <div class="card-desc">
+          - retention_analysis 音频标记 (fully_copy / partially_copy / reference / weak_reference)<br>
+          - 区分 diegetic vs non-diegetic 声音<br>
+          - 音频一致性校验 (说话人ID连续性)<br>
+          - 补充缺失的音效/环境音描述
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-yellow">Phase 5</span> 音频结构化输出</div>
+        <div class="card-desc">
+          按官方格式生成：<br>
+          - <code>overall_soundscape</code>: 环境音 + 物理动作音<br>
+          - <code>non_diegetic_music</code>: 背景音乐描述<br>
+          - detailed_description 中嵌入 &lt;Audio N&gt; 引用<br>
+          - subject_definitions 中定义 &lt;Audio N&gt; 标签
+        </div>
+      </div>
+    </div>
+
+    <h3>5.3 音频输出格式详解</h3>
+
+    <h4>overall_soundscape（环境音 + 物理动作音）</h4>
+    <p>1-4 句英文，连续段落。描述风、雨、交通、脚步声、衣服摩擦、撞击、呼吸、笑声等。
+    对话和演唱不属于这里，应放在 multimodal_description / detailed_description 中。</p>
+    <pre>overall_soundscape: Steady rain taps against the café windows while low room ambience continues underneath. The entrance bell rings once, followed by wet footsteps and the soft scrape of a chair.</pre>
+
+    <h4>non_diegetic_music（非剧情音乐）</h4>
+    <p>1-3 句英文，描述角色听不到、只有观众能听到的背景音乐。关注乐器、速度、节奏、力度变化。
+    不使用抽象情绪词。角色能听到的歌声/乐器/收音机/电视属于 diegetic，应放在 multimodal_description 中。</p>
+    <pre>non_diegetic_music: Sparse piano notes at a slow tempo, joined by sustained low strings that gradually increase in volume before fading out.</pre>
+
+    <h4>Ref2VA 音频引用标签</h4>
+    <pre>&lt;Audio 1&gt;: fully_copy - &lt;Audio 1&gt; is reused 1:1 as the target video's complete final audio track.
+&lt;Audio 2&gt;: partially_copy - the atmospheric background music from &lt;Audio 2&gt; is reused in the target video.
+&lt;Audio 3&gt;: reference - the target speaker follows &lt;Audio 3&gt;'s voice timbre and measured delivery.</pre>
+
+    <h3>5.4 音频参考在 Ref2VA 中的完整链路</h3>
+    <p>以一个 Ref2VA 场景为例：参考视频 + 参考音频（音色参考），流程如下：</p>
+    <pre>
+Phase 1: 解析 "音色参考音频1" -> audio_references: [{"id": "Audio 1", "role": "voice_timbre"}]
+
+Phase 2: Preprocessor 分析 Audio 1 的音色 -> "calm male voice, medium pitch, measured delivery"
+         生成: &lt;Audio 1&gt; is the voice-timbre reference for &lt;Subject 1&gt; (S1).
+
+Phase 3: 规划 S1 在 2.0s 处说话，参考 Audio 1 的音色
+
+Phase 4: 推理 retention: &lt;Audio 1&gt;: reference - voice timbre guides dialogue delivery
+
+Phase 5: 输出:
+  subject_definitions:
+  &lt;Subject 1&gt; is the young man in &lt;Video 1&gt;...
+  &lt;Audio 1&gt; is the voice-timbre reference for &lt;Subject 1&gt; (S1).
+  
+  retention_analysis:
+  &lt;Audio 1&gt;: reference - its vocal timbre guides the dialogue delivery of &lt;Subject 1&gt;.
+  
+  detailed_description:
+  ... &lt;Subject 1&gt; (S1) speaks in the calm male voice referenced from &lt;Audio 1&gt;: &lt;d&gt;[English] ...&lt;/d&gt;
+  
+  overall_soundscape:
+  ...
+  
+  non_diegetic_music:
+  ...
+</pre>
+
+    <h3>5.5 项目结构中的音频模块</h3>
+    <pre>
+preprocessor/
+├── __init__.py
+├── video_sampler.py         # 视频帧采样
+├── scene_detector.py        # 场景切分
+└── audio/                   # 音频分析子模块
+    ├── __init__.py
+    ├── transcriber.py       # 语音转写 (Whisper/SenseVoice)
+    ├── source_separator.py  # 音源分离 (Demucs)
+    ├── music_analyzer.py    # 音乐特征提取 (librosa/CLAP)
+    ├── sound_event.py       # 声音事件检测 (YAMNet)
+    ├── voice_analyzer.py    # 音色特征提取 (SpeechBrain)
+    └── stereo_analyzer.py   # 立体声分析 (librosa)</pre>
+
+  </div>
+
   <!-- GPU 调度策略 -->
   <div class="section">
     <h2>5. GPU 调度策略</h2>
@@ -718,8 +898,15 @@ h3-context-ir/
 ├── preprocessor/                # 输入预处理
 │   ├── __init__.py
 │   ├── video_sampler.py         # 视频帧采样（OpenCV/Decord）
-│   ├── audio_transcriber.py     # 音频转写（Whisper）
-│   └── scene_detector.py        # 场景切分检测（PySceneDetect）
+│   ├── scene_detector.py        # 场景切分检测（PySceneDetect）
+│   └── audio/                   # 音频分析子模块
+│       ├── __init__.py
+│       ├── transcriber.py       # 语音转写 (Whisper/SenseVoice)
+│       ├── source_separator.py  # 音源分离 (Demucs)
+│       ├── music_analyzer.py    # 音乐特征提取 (librosa/CLAP)
+│       ├── sound_event.py       # 声音事件检测 (YAMNet)
+│       ├── voice_analyzer.py    # 音色特征提取 (SpeechBrain)
+│       └── stereo_analyzer.py   # 立体声分析 (librosa)
 ├── pipeline/                    # 5 阶段流水线核心
 │   ├── __init__.py
 │   ├── base_pipeline.py         # 流水线基类（阶段编排、模型切换、缓存、重试）
@@ -752,7 +939,7 @@ h3-context-ir/
 
   <!-- 实施路线 -->
   <div class="section">
-    <h2>7. 实施路线</h2>
+    <h2>8. 实施路线</h2>
 
     <div class="timeline">
       <div class="timeline-item">
@@ -771,7 +958,7 @@ h3-context-ir/
         <div class="tl-title">第 3-5 天：预处理管线 + System Prompt 设计 <span class="tl-days">3 天</span></div>
         <div class="tl-desc">
           <ul>
-            <li>实现 <code>video_sampler.py</code>、<code>audio_transcriber.py</code>、<code>scene_detector.py</code></li>
+            <li>实现 <code>video_sampler.py</code>、<code>scene_detector.py</code>、音频分析管线（6 个模块）</li>
             <li>设计 Phase 1-4 的 System Prompt 模板</li>
             <li>基于官方 base-en.txt / ref-en.txt 设计 Phase 5 的 System Prompt</li>
             <li>实现 <code>output_validator.py</code>（格式校验 + 自动修复）</li>
@@ -815,7 +1002,7 @@ h3-context-ir/
 
   <!-- Ablation 评估 -->
   <div class="section">
-    <h2>8. Ablation 评估策略</h2>
+    <h2>9. Ablation 评估策略</h2>
     <p>由于每个阶段使用不同模型，可以通过 ablation 实验验证每个阶段和每个模型的实际价值：</p>
     <table>
       <thead>
@@ -830,6 +1017,8 @@ h3-context-ir/
         <tr><td>去掉 Phase 4</td><td>跳过推理，直接组装</td><td>逻辑推理的收益</td></tr>
         <tr><td>Phase 4 换非 R1</td><td>DeepSeek-R1 -> Qwen3-32B</td><td>CoT 推理的增益</td></tr>
         <tr><td>去掉 Phase 5</td><td>直接输出 JSON</td><td>结构化输出的必要性</td></tr>
+        <tr><td>去掉音频预处理</td><td>跳过音源分离/特征提取，只用 Whisper</td><td>音源分离和特征提取的收益</td></tr>
+        <tr><td>去掉音频分析模块</td><td>Phase 2-5 完全不处理音频引用</td><td>音频分析模块的整体贡献</td></tr>
         <tr><td>全部合并为单阶段</td><td>Qwen3-VL-32B 一次性生成</td><td>多阶段 vs 单阶段对比</td></tr>
       </tbody>
     </table>
@@ -837,7 +1026,7 @@ h3-context-ir/
 
   <!-- 资源需求 -->
   <div class="section">
-    <h2>9. 资源需求</h2>
+    <h2>10. 资源需求</h2>
     <table>
       <thead>
         <tr><th>组件</th><th>配置</th><th>说明</th></tr>
@@ -857,7 +1046,7 @@ h3-context-ir/
 
   <!-- 关键设计决策 -->
   <div class="section">
-    <h2>10. 关键设计决策</h2>
+    <h2>11. 关键设计决策</h2>
     <ol>
       <li><strong>每阶段独立选型</strong>：Phase 1/5 用轻量模型，Phase 2/3 用多模态模型，Phase 4 用推理模型，各取所长</li>
       <li><strong>阶段间输出为结构化 JSON</strong>：便于程序化处理、校验、缓存，也便于跨阶段传递</li>
@@ -871,14 +1060,14 @@ h3-context-ir/
 
   <!-- PipelineContext 数据结构 -->
   <div class="section">
-    <h2>11. 核心数据结构：PipelineContext</h2>
+    <h2>12. 核心数据结构：PipelineContext</h2>
     <pre>@dataclass
 class PipelineContext:
     # 原始输入
     raw_input: dict  # {content: [...], duration, ratio, model}
     
     # 预处理结果
-    preprocessed: dict  # {video_frames, audio_transcripts, scene_changes}
+    preprocessed: dict  # {video_frames, scene_changes, audio_analysis}
     
     # Phase 1 (Qwen3-8B)
     parsed_instruction: dict  # 指令树
@@ -892,8 +1081,8 @@ class PipelineContext:
     
     # Phase 4 (DeepSeek-R1-32B)
     retention_analysis: list[str]  # Ref2VA 模式
-    inferred_details: dict  # 推理补充
-    consistency_notes: dict  # 一致性校验
+    inferred_details: dict  # 推理补充 (含音频缺失细节)
+    consistency_notes: dict  # 一致性校验 (含音频连续性)
     
     # Phase 5 (Qwen3-32B)
     final_prompt: str  # 结构化 prompt</pre>

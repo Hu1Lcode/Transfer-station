@@ -369,7 +369,7 @@
   <!-- 背景与概述 -->
   <div class="section">
     <h2>1. 背景与概述</h2>
-    <p>H3-Context-IR 是 MiniMax H3 系统的<strong>多模态上下文预处理与编排系统</strong>，负责理解文本、图像、视频、音频之间的语义关系，输出结构化中间表示供 H3-Base 消费。</p>
+    <p>H3-Context-IR 是 MiniMax H3 系统的<strong>多模态上下文预处理与编排系统</strong>，<strong>输入</strong>是用户编写的 <strong>prompt</strong> + 音频/视频/图片等参考素材，<strong>输出</strong>是符合官方 <code>base-en.txt</code> / <code>ref-en.txt</code> 模板的结构化文本（供 H3-Base 直接消费生成视频）。</p>
     
     <div class="highlight-box info">
       <strong>关键事实</strong>：Context-IR 未开源，但输出格式通过官方 Prompt Writing Guide 完整公开。README 明确说 "developers can follow the Prompting Guidance to build their own preprocessing systems"，这意味着复现可行。
@@ -477,7 +477,22 @@ skills/h3-prompt-writing/
   <div class="section">
     <h2>3. 5 阶段流水线架构</h2>
 
+    <div class="highlight-box info">
+      <strong>Context-IR 整体边界</strong><br>
+      <strong>输入</strong>：用户 prompt（文本描述）+ 参考素材（图像 / 视频 / 音频）<br>
+      <strong>输出</strong>：符合官方 <code>base-en.txt</code> / <code>ref-en.txt</code> 模板的结构化 prompt（Text）<br>
+      5 个阶段 + 预处理共同构成 Context-IR 的全部处理逻辑，输出直接送入 H3-Base 生成视频。
+    </div>
+
     <div class="pipeline-flow">
+      <div class="preprocessor-block" style="background:#fff3e0;border-color:#ff9800;">
+        <strong>Context-IR 输入</strong><br>
+        <span style="font-size:0.85em;color:var(--text-secondary);">
+          prompt (文本) + 图像 (参考帧) + 视频 (参考视频) + 音频 (参考音色/BGM/音效)
+        </span>
+      </div>
+      <div class="pipeline-arrow"></div>
+
       <div class="preprocessor-block">
         <strong>Preprocessor</strong><br>
         <span style="font-size:0.85em;color:var(--text-secondary);">
@@ -530,16 +545,16 @@ skills/h3-prompt-writing/
         <div class="step-num">5</div>
         <div class="step-info">
           <div class="step-name">结构化输出 (Structured Output)</div>
-          <div class="step-model">Qwen3-32B · JSON → 最终 prompt (Text)</div>
+          <div class="step-model">Qwen3-32B · JSON → 符合官方模板的最终 prompt (Text)</div>
         </div>
         <div class="step-gpu">1 GPU</div>
       </div>
       <div class="pipeline-arrow"></div>
 
       <div class="preprocessor-block" style="background:#e8f5e9;border-color:var(--success);">
-        <strong>H3-Base</strong><br>
+        <strong>Context-IR 输出 → H3-Base</strong><br>
         <span style="font-size:0.85em;color:var(--text-secondary);">
-          SGLang · 4x A100-80G · 生成 768p / 2K 视频
+          符合 base-en.txt / ref-en.txt 模板的结构化文本 &nbsp;|&nbsp; 直接送入 H3-Base 生成视频
         </span>
       </div>
     </div>
@@ -550,7 +565,7 @@ skills/h3-prompt-writing/
     <h2>4. 各阶段详细设计</h2>
 
     <h3>预处理（Preprocessor）</h3>
-    <p>对所有输入进行统一的多模态预处理，输出结构化 JSON 供各阶段消费：</p>
+    <p>对 Context-IR 的全部输入（prompt + 图像 + 视频 + 音频）进行统一的多模态预处理，输出结构化 JSON 供各阶段消费：</p>
 
     <table>
       <thead>
@@ -703,8 +718,8 @@ skills/h3-prompt-writing/
 }</pre>
 
     <h3>Phase 5: 结构化输出生成</h3>
-    <p><strong>模型</strong>: Qwen3-32B · <strong>输入</strong>: 全部前序输出 · <strong>输出</strong>: 最终结构化 prompt (Text)</p>
-    <p>System Prompt 直接基于官方 <code>base-en.txt</code> 和 <code>ref-en.txt</code> 编写，确保格式 100% 对齐。</p>
+    <p><strong>模型</strong>: Qwen3-32B · <strong>输入</strong>: 全部前序输出 · <strong>输出</strong>: 符合官方 <code>base-en.txt</code> / <code>ref-en.txt</code> 模板的最终结构化 prompt (Text)</p>
+    <p>这是 Context-IR 的最终输出，直接送入 H3-Base 生成视频。System Prompt 基于官方规范编写，确保格式 100% 对齐。</p>
 
     <h4>输出字段详解（视觉 + 文本 + 音频统一格式）</h4>
     

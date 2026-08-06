@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniMax H3-Context-IR 复现方案</title>
+<style>
+  :root {
+    --primary: #1a73e8;
+    --primary-light: #e8f0fe;
+    --accent: #ea4335;
+    --success: #34a853;
+    --warning: #fbbc04;
+    --bg: #ffffff;
+    --bg-alt: #f8f9fa;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --border: #dadce0;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    color: var(--text);
+    background: var(--bg-alt);
+    line-height: 1.6;
+  }
+  .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+    color: white;
+    padding: 48px 0 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 500px;
+    height: 500px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 50%;
+  }
+  .header h1 { font-size: 2.2em; font-weight: 700; margin-bottom: 8px; position: relative; z-index: 1; }
+  .header .subtitle { font-size: 1.1em; opacity: 0.85; position: relative; z-index: 1; }
+  .header .meta {
+    margin-top: 16px;
+    display: flex;
+    gap: 24px;
+    font-size: 0.9em;
+    opacity: 0.75;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Section */
+  .section {
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin: 24px 0;
+    padding: 32px 36px;
+    border: 1px solid var(--border);
+  }
+  .section h2 {
+    font-size: 1.4em;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid var(--primary);
+    color: var(--primary);
+  }
+  .section h3 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 20px 0 10px;
+    color: var(--text);
+  }
+  .section h4 {
+    font-size: 1em;
+    font-weight: 600;
+    margin: 16px 0 8px;
+    color: var(--text-secondary);
+  }
+  .section p { margin-bottom: 12px; }
+  .section ul, .section ol { margin: 8px 0 16px 20px; }
+  .section li { margin-bottom: 6px; }
+
+  /* Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: transform 0.1s;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card .card-title {
+    font-weight: 600;
+    font-size: 1em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card .card-title .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    color: white;
+  }
+  .badge-blue { background: var(--primary); }
+  .badge-green { background: var(--success); }
+  .badge-red { background: var(--accent); }
+  .badge-yellow { background: var(--warning); color: #333; }
+  .card .card-desc { font-size: 0.9em; color: var(--text-secondary); }
+  .card .card-model {
+    margin-top: 10px;
+    font-size: 0.85em;
+    font-family: "SF Mono", "Cascadia Code", monospace;
+    background: var(--bg);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    display: inline-block;
+  }
+
+  /* Pipeline Flow */
+  .pipeline-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 24px 0;
+    padding: 20px;
+    background: var(--bg-alt);
+    border-radius: 10px;
+  }
+  .pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    max-width: 700px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+  }
+  .pipeline-step .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9em;
+    flex-shrink: 0;
+  }
+  .pipeline-step .step-info { flex: 1; }
+  .pipeline-step .step-info .step-name { font-weight: 600; }
+  .pipeline-step .step-info .step-model {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    font-family: monospace;
+  }
+  .pipeline-step .step-gpu {
+    font-size: 0.8em;
+    color: var(--primary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pipeline-arrow {
+    width: 2px;
+    height: 24px;
+    background: var(--border);
+    position: relative;
+  }
+  .pipeline-arrow::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--border);
+  }
+
+  /* Preprocessor */
+  .preprocessor-block {
+    background: var(--primary-light);
+    border: 2px dashed var(--primary);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    text-align: center;
+    width: 100%;
+    max-width: 700px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9em;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+  }
+  tr:hover { background: var(--bg-alt); }
+
+  /* Code blocks */
+  pre {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 16px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin: 12px 0;
+    font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  }
+  code {
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: "SF Mono", "Cascadia Code", monospace;
+  }
+  pre code { background: none; padding: 0; }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding: 0 0 0 32px;
+    margin: 16px 0;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -26px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--bg);
+  }
+  .timeline-item .tl-title {
+    font-weight: 600;
+    color: var(--primary);
+  }
+  .timeline-item .tl-days {
+    display: inline-block;
+    font-size: 0.8em;
+    color: white;
+    background: var(--primary);
+    padding: 1px 10px;
+    border-radius: 10px;
+    margin-left: 8px;
+  }
+  .timeline-item .tl-desc { margin-top: 4px; font-size: 0.9em; color: var(--text-secondary); }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 500;
+    margin: 2px;
+  }
+  .tag-vl { background: #e8f5e9; color: #2e7d32; }
+  .tag-text { background: #e3f2fd; color: #1565c0; }
+  .tag-reason { background: #fce4ec; color: #c62828; }
+
+  /* Highlight box */
+  .highlight-box {
+    background: #fff8e1;
+    border-left: 4px solid var(--warning);
+    padding: 14px 18px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+  }
+  .highlight-box.info {
+    background: var(--primary-light);
+    border-left-color: var(--primary);
+  }
+  .highlight-box.success {
+    background: #e8f5e9;
+    border-left-color: var(--success);
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 32px 0;
+    color: var(--text-secondary);
+    font-size: 0.85em;
+  }
+
+  @media (max-width: 640px) {
+    .header h1 { font-size: 1.6em; }
+    .section { padding: 20px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .pipeline-step { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="container">
+    <h1>MiniMax H3-Context-IR 复现方案</h1>
+    <div class="subtitle">5 阶段多模型流水线 · 基于 Qwen3-VL-32B + DeepSeek-R1 架构</div>
+    <div class="meta">
+      <span>阶段数: 5</span>
+      <span>模型数: 4</span>
+      <span>硬件: 4x A100-80G</span>
+      <span>预估工期: 18 天</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 背景与概述 -->
+  <div class="section">
+    <h2>1. 背景与概述</h2>
+    <p>H3-Context-IR 是 MiniMax H3 系统的<strong>多模态上下文预处理与编排系统</strong>，负责理解文本、图像、视频、音频之间的语义关系，输出结构化中间表示供 H3-Base 消费。</p>
+    
+    <div class="highlight-box info">
+      <strong>关键事实</strong>：Context-IR 未开源，但输出格式通过官方 Prompt Writing Guide 完整公开。README 明确说 "developers can follow the Prompting Guidance to build their own preprocessing systems"，这意味着复现可行。
+    </div>
+
+    <h3>官方 Skill 分析</h3>
+    <p>GitHub 仓库 <code>skills/h3-prompt-writing/</code> 包含：</p>
+    <pre>
+skills/h3-prompt-writing/
+├── SKILL.md                    # 入口：定义 Workflow 和 Output Rules
+├── agents/openai.yaml          # Agent 配置
+└── references/
+    ├── base-en.txt             # Base 模式 Prompt 写作指南
+    └── ref-en.txt              # Full-Reference 模式 Prompt 写作指南</pre>
+    
+    <div class="highlight-box">
+      <strong>官方 Skill 本质上是单阶段 Agent 方案</strong>：让 AI 一次性完成全部工作。我们的 5 阶段流水线是更结构化的工业级方案，官方 Skill 可作为对比基线。
+    </div>
+  </div>
+
+  <!-- 核心设计 -->
+  <div class="section">
+    <h2>2. 核心设计：每阶段用最适合的模型</h2>
+    
+    <table>
+      <thead>
+        <tr>
+          <th>阶段</th>
+          <th>任务</th>
+          <th>模态</th>
+          <th>推理需求</th>
+          <th>推荐模型</th>
+          <th>GPU</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Phase 1</strong></td>
+          <td>文本解析 + 分类</td>
+          <td><span class="tag tag-text">纯文本</span></td>
+          <td>低</td>
+          <td><code>Qwen3-8B</code></td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><strong>Phase 2</strong></td>
+          <td>视觉理解 + 跨模态关联</td>
+          <td><span class="tag tag-vl">多模态</span></td>
+          <td>中</td>
+          <td><code>Qwen3-VL-32B</code></td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>Phase 3</strong></td>
+          <td>时序规划 + 镜头编排</td>
+          <td><span class="tag tag-vl">多模态/文本</span></td>
+          <td>中</td>
+          <td><code>Qwen3-VL-32B</code> (复用)</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>Phase 4</strong></td>
+          <td>逻辑推理 + 一致性校验</td>
+          <td><span class="tag tag-text">纯文本</span></td>
+          <td><strong>高</strong></td>
+          <td><code>DeepSeek-R1-32B</code></td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><strong>Phase 5</strong></td>
+          <td>指令遵循 + 格式化输出</td>
+          <td><span class="tag tag-text">纯文本</span></td>
+          <td>低</td>
+          <td><code>Qwen3-32B</code></td>
+          <td>1</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">Phase 1</span> Qwen3-8B</div>
+        <div class="card-desc">指令解析本质是文本分类 + 信息抽取，8B 级别足够胜任。不需要视觉能力，用小模型减少 GPU 占用。</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-green">Phase 2</span> Qwen3-VL-32B</div>
+        <div class="card-desc">唯一必须多模态的阶段。与 H3-Encoder 同源（Qwen3-VL-32B），架构对齐最好。需要看清图像/视频帧中的主体、场景、物体。</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-green">Phase 3</span> Qwen3-VL-32B</div>
+        <div class="card-desc">可复用 Phase 2 的 VL 实例。如果 Phase 2 输出足够丰富，可退化为 Qwen3-32B（文本版），只需 1 GPU。</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-red">Phase 4</span> DeepSeek-R1-32B</div>
+        <div class="card-desc">推理最密集的阶段。retention_analysis 需要判断保留级别 + 推理缺失细节 + 校验一致性。DeepSeek-R1 的 Chain-of-Thought 推理能力在此发挥最大价值。</div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-yellow">Phase 5</span> Qwen3-32B</div>
+        <div class="card-desc">纯文本组装的"格式化"阶段，所有信息已在结构化 JSON 中。需要指令遵循能力强、能严格按格式输出的模型。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 流水线架构 -->
+  <div class="section">
+    <h2>3. 5 阶段流水线架构</h2>
+
+    <div class="pipeline-flow">
+      <div class="preprocessor-block">
+        <strong>Preprocessor</strong><br>
+        <span style="font-size:0.85em;color:var(--text-secondary);">
+          FFmpeg + Whisper + PySceneDetect &nbsp;|&nbsp; 视频帧采样 · 音频转写 · 场景切分
+        </span>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <div class="step-name">指令解析 (Instruction Parsing)</div>
+          <div class="step-model">Qwen3-8B · 文本 → 指令树 (JSON)</div>
+        </div>
+        <div class="step-gpu">1 GPU</div>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <div class="step-name">跨模态关联 (Cross-modal Association)</div>
+          <div class="step-model">Qwen3-VL-32B · 图像/视频 → 映射表 + subject_definitions (JSON)</div>
+        </div>
+        <div class="step-gpu">2 GPU</div>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-info">
+          <div class="step-name">时序理解 (Temporal Understanding)</div>
+          <div class="step-model">Qwen3-VL-32B · 视频帧 → 镜头时间线 (JSON)</div>
+        </div>
+        <div class="step-gpu">2 GPU</div>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-info">
+          <div class="step-name">逻辑推理 (Logical Reasoning)</div>
+          <div class="step-model">DeepSeek-R1-32B · CoT 推理 → retention_analysis (JSON)</div>
+        </div>
+        <div class="step-gpu">1 GPU</div>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="pipeline-step">
+        <div class="step-num">5</div>
+        <div class="step-info">
+          <div class="step-name">结构化输出 (Structured Output)</div>
+          <div class="step-model">Qwen3-32B · JSON → 最终 prompt (Text)</div>
+        </div>
+        <div class="step-gpu">1 GPU</div>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="preprocessor-block" style="background:#e8f5e9;border-color:var(--success);">
+        <strong>H3-Base</strong><br>
+        <span style="font-size:0.85em;color:var(--text-secondary);">
+          SGLang · 4x A100-80G · 生成 768p / 2K 视频
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 各阶段详细设计 -->
+  <div class="section">
+    <h2>4. 各阶段详细设计</h2>
+
+    <h3>Phase 1: 指令解析</h3>
+    <p><strong>模型</strong>: Qwen3-8B · <strong>输入</strong>: 用户 text + media 元数据 · <strong>输出</strong>: 指令树 (JSON)</p>
+    <pre>{
+  "task_type": "t2va" | "i2va" | "fl2va" | "ref2va",
+  "duration": 10,
+  "ratio": "16:9",
+  "style": "cinematic" | "live-action" | "2D-animated" | ...,
+  "shots_intent": [
+    {"shot_id": 1, "description": "...", "subjects": [...], "actions": [...]}
+  ],
+  "references": {
+    "images": [{"id": "Picture 1", "role": "first_frame"}],
+    "videos": [{"id": "Video 1", "role": "reference_video"}],
+    "audios": [{"id": "Audio 1", "role": "reference_audio"}]
+  },
+  "dialogue_intent": [...],
+  "soundscape_intent": "...",
+  "music_intent": "..."
+}</pre>
+
+    <h3>Phase 2: 跨模态关联</h3>
+    <p><strong>模型</strong>: Qwen3-VL-32B · <strong>输入</strong>: 指令树 + 原始媒体 · <strong>输出</strong>: 跨模态映射 + subject_definitions (JSON)</p>
+    <pre>{
+  "subject_definitions": [
+    "&lt;Subject 1&gt; is the young woman with long dark hair in &lt;Picture 1&gt;..."
+  ],
+  "cross_modal_mapping": {
+    "text_refs": [{"text": "穿粉色西装的男子", "maps_to": "Subject 1", "source": "Video 1"}]
+  },
+  "reference_relationships": {
+    "Picture 1": {"role": "first_frame", "provides": ["Subject 1"]},
+    "Video 1": {"role": "source_video", "provides": ["Subject 1", "Subject 2"]},
+    "Audio 1": {"role": "voice_timbre", "provides": ["S1 voice"]}
+  }
+}</pre>
+
+    <h3>Phase 3: 时序理解</h3>
+    <p><strong>模型</strong>: Qwen3-VL-32B · <strong>输入</strong>: 指令树 + 映射 + 视频帧 · <strong>输出</strong>: 镜头时间线 (JSON)</p>
+    <pre>{
+  "total_duration": 10.0,
+  "shots": [
+    {
+      "shot_id": 1, "start_time": 0.0, "end_time": 4.5,
+      "camera": "medium wide shot, pushing in slowly",
+      "composition": "...",
+      "subjects": ["Subject 1"],
+      "actions": "...",
+      "dialogue": [{"speaker": "S1", "text": "...", "time": 2.0}],
+      "transition": "cut"
+    },
+    {
+      "shot_id": 2, "start_time": 4.5, "end_time": 10.0,
+      "camera": "close-up, shake strongly",
+      "subjects": ["Subject 1"],
+      "transition": "cut"
+    }
+  ],
+  "reference_alignment": {
+    "Picture 1": {"aligns_with": "Shot 1", "time": 0.0}
+  }
+}</pre>
+
+    <h3>Phase 4: 逻辑推理</h3>
+    <p><strong>模型</strong>: DeepSeek-R1-32B · <strong>输入</strong>: Phase 1-3 输出 · <strong>输出</strong>: retention_analysis + 推理结果 (JSON)</p>
+    <pre>{
+  "retention_analysis": [
+    "&lt;Subject 1&gt; (appears in [Shot 1], [Shot 2]): fully_preserved - ...",
+    "&lt;Audio 1&gt;: reference - voice timbre guides dialogue delivery..."
+  ],
+  "inferred_details": {
+    "missing_visuals": "补充服装颜色为深海军蓝...",
+    "missing_sound": "添加环境音：舰桥的低频嗡鸣..."
+  },
+  "consistency_notes": {
+    "speaker_continuity": "S1 在 Shot 1 和 Shot 2 中保持一致"
+  }
+}</pre>
+
+    <h3>Phase 5: 结构化输出生成</h3>
+    <p><strong>模型</strong>: Qwen3-32B · <strong>输入</strong>: 全部前序输出 · <strong>输出</strong>: 最终结构化 prompt (Text)</p>
+    <p>System Prompt 直接基于官方 <code>base-en.txt</code> 和 <code>ref-en.txt</code> 编写，确保格式 100% 对齐。</p>
+    
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Base 模式输出</div>
+        <div class="card-desc">
+          <pre style="margin:8px 0;font-size:0.8em;">integrated_multimodal_description: [Shot 1] Cinematic, ...
+
+overall_soundscape: ...
+
+non_diegetic_music: ...</pre>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Ref2VA 模式输出</div>
+        <div class="card-desc">
+          <pre style="margin:8px 0;font-size:0.8em;">subject_definitions:
+&lt;Subject 1&gt; is ...
+
+summary:
+[reference generation] ...
+
+retention_analysis:
+&lt;Subject 1&gt;: fully_preserved - ...
+
+detailed_description:
+The target video is in ... style.
+
+overall_soundscape:
+...
+
+non_diegetic_music:
+...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GPU 调度策略 -->
+  <div class="section">
+    <h2>5. GPU 调度策略</h2>
+    <p>由于 5 个阶段串行执行，4 张 A100-80G 可以分时复用：</p>
+    <pre>
+时间线 -->
+GPU 0: [Phase 1: Qwen3-8B] -> [Phase 2: Qwen3-VL-32B] -> [Phase 3: Qwen3-VL-32B] -> [Phase 4: ----]       -> [Phase 5: Qwen3-32B]
+GPU 1: [Phase 1: ----]       -> [Phase 2: Qwen3-VL-32B] -> [Phase 3: Qwen3-VL-32B] -> [Phase 4: DeepSeek-R1] -> [Phase 5: ----]
+GPU 2: [Phase 1: ----]       -> [Phase 2: Qwen3-VL-32B] -> [Phase 3: Qwen3-VL-32B] -> [Phase 4: ----]       -> [Phase 5: ----]
+GPU 3: [Phase 1: ----]       -> [Phase 2: ----]          -> [Phase 3: ----]          -> [Phase 4: ----]       -> [Phase 5: ----]</pre>
+
+    <table>
+      <thead>
+        <tr><th>阶段</th><th>模型</th><th>GPU 数</th><th>策略</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Phase 1</td><td>Qwen3-8B</td><td>1</td><td>单卡推理，轻量模型</td></tr>
+        <tr><td>Phase 2</td><td>Qwen3-VL-32B</td><td>2</td><td>张量并行</td></tr>
+        <tr><td>Phase 3</td><td>Qwen3-VL-32B</td><td>2</td><td>复用 Phase 2 实例，或切换 Qwen3-32B 单卡</td></tr>
+        <tr><td>Phase 4</td><td>DeepSeek-R1-32B</td><td>1</td><td>单卡推理，INT8 可进一步降低显存</td></tr>
+        <tr><td>Phase 5</td><td>Qwen3-32B</td><td>1</td><td>单卡推理</td></tr>
+      </tbody>
+    </table>
+    <div class="highlight-box info">每个阶段结束后可卸载模型，释放 GPU 内存给下一阶段。无需同时加载全部模型。</div>
+  </div>
+
+  <!-- 项目结构 -->
+  <div class="section">
+    <h2>6. 项目结构</h2>
+    <pre>
+h3-context-ir/
+├── config/
+│   ├── settings.py              # 全局配置（模型端点、API keys 等）
+│   └── prompts/                 # 6 个 System Prompt 模板
+│       ├── phase1_parse.txt
+│       ├── phase2_associate.txt
+│       ├── phase3_temporal.txt
+│       ├── phase4_reason.txt
+│       ├── phase5_generate_base.txt
+│       └── phase5_generate_ref2va.txt
+├── references/                  # 官方 Prompt Writing Guide 原文
+│   ├── base-en.txt
+│   └── ref-en.txt
+├── examples/                    # 官方 API 收集的输入-输出对
+│   ├── t2va/
+│   ├── i2va/
+│   ├── fl2va/
+│   └── ref2va/
+├── preprocessor/                # 输入预处理
+│   ├── __init__.py
+│   ├── video_sampler.py         # 视频帧采样（OpenCV/Decord）
+│   ├── audio_transcriber.py     # 音频转写（Whisper）
+│   └── scene_detector.py        # 场景切分检测（PySceneDetect）
+├── pipeline/                    # 5 阶段流水线核心
+│   ├── __init__.py
+│   ├── base_pipeline.py         # 流水线基类（阶段编排、模型切换、缓存、重试）
+│   ├── phase1_parser.py         # 指令解析阶段 (Qwen3-8B)
+│   ├── phase2_associator.py     # 跨模态关联阶段 (Qwen3-VL-32B)
+│   ├── phase3_temporal.py       # 时序理解阶段 (Qwen3-VL-32B)
+│   ├── phase4_reasoner.py       # 逻辑推理阶段 (DeepSeek-R1-32B)
+│   ├── phase5_generator.py      # 结构化输出生成阶段 (Qwen3-32B)
+│   └── context.py               # 阶段间数据传递对象（PipelineContext）
+├── engine/                      # 多模型推理客户端
+│   ├── __init__.py
+│   ├── base_client.py           # 模型客户端基类
+│   ├── text_client.py           # 文本模型调用（Qwen3-8B, Qwen3-32B, DeepSeek-R1）
+│   ├── vl_client.py             # VL 模型调用（Qwen3-VL-32B, vLLM/SGLang）
+│   ├── model_manager.py         # 模型生命周期管理（加载/卸载/切换）
+│   └── output_validator.py      # 输出格式校验与自动修复
+├── api/                         # FastAPI 服务
+│   ├── __init__.py
+│   ├── server.py                # 兼容官方 /v2/h3_context_ir 接口
+│   └── schemas.py               # 请求/响应 Schema
+├── evaluation/                  # 评估工具
+│   ├── __init__.py
+│   ├── compare.py               # 官方 vs 自建对比
+│   └── metrics.py               # 评估指标
+├── scripts/
+│   ├── collect_official_samples.py
+│   └── run_pipeline.py
+└── requirements.txt</pre>
+  </div>
+
+  <!-- 实施路线 -->
+  <div class="section">
+    <h2>7. 实施路线</h2>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="tl-title">第 1-2 天：基础环境搭建 <span class="tl-days">2 天</span></div>
+        <div class="tl-desc">
+          <ul>
+            <li>部署 H3-Base（FL2VA + Ref2VA）— 4x A100, SGLang</li>
+            <li>申请 MiniMax API Key，可调用官方 Context-IR API</li>
+            <li>部署 Qwen3-VL-32B（2x A100, vLLM/SGLang）</li>
+            <li>部署 Qwen3-8B + Qwen3-32B + DeepSeek-R1-32B（1x A100 分时）</li>
+            <li>拉取官方 references 到本地，编写 <code>collect_official_samples.py</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">第 3-5 天：预处理管线 + System Prompt 设计 <span class="tl-days">3 天</span></div>
+        <div class="tl-desc">
+          <ul>
+            <li>实现 <code>video_sampler.py</code>、<code>audio_transcriber.py</code>、<code>scene_detector.py</code></li>
+            <li>设计 Phase 1-4 的 System Prompt 模板</li>
+            <li>基于官方 base-en.txt / ref-en.txt 设计 Phase 5 的 System Prompt</li>
+            <li>实现 <code>output_validator.py</code>（格式校验 + 自动修复）</li>
+          </ul>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">第 5-10 天：5 阶段流水线实现 <span class="tl-days">5 天</span></div>
+        <div class="tl-desc">
+          <ul>
+            <li>实现 <code>context.py</code>（PipelineContext 数据结构）</li>
+            <li>实现 <code>base_client.py</code> + <code>text_client.py</code> + <code>vl_client.py</code></li>
+            <li>实现 <code>model_manager.py</code>（模型生命周期管理）</li>
+            <li>实现 <code>base_pipeline.py</code>（流水线编排框架）</li>
+            <li>实现 Phase 1-5 各阶段模块 + <code>run_pipeline.py</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">第 10-14 天：集成测试与迭代优化 <span class="tl-days">4 天</span></div>
+        <div class="tl-desc">
+          <ul>
+            <li>用官方 API 输出 + H3-Base 建立 Ground Truth 基准</li>
+            <li>用自建流水线输出 + H3-Base 生成对比样本</li>
+            <li>实现官方单阶段方案作为对比基线</li>
+            <li>逐阶段 ablation 实验，评估各阶段贡献度</li>
+          </ul>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">第 14-18 天：API 封装与工程化 <span class="tl-days">4 天</span></div>
+        <div class="tl-desc">
+          <ul>
+            <li>实现 FastAPI 服务，兼容官方 <code>/v2/h3_context_ir</code> 接口</li>
+            <li>集成 Full 2K Workflow（Context-IR -> H3-Base -> Regenerate-2K）</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ablation 评估 -->
+  <div class="section">
+    <h2>8. Ablation 评估策略</h2>
+    <p>由于每个阶段使用不同模型，可以通过 ablation 实验验证每个阶段和每个模型的实际价值：</p>
+    <table>
+      <thead>
+        <tr><th>实验</th><th>改动</th><th>验证目标</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>去掉 Phase 1</td><td>Phase 2 直接处理原始文本</td><td>指令解析是否必要</td></tr>
+        <tr><td>Phase 1 换小模型</td><td>Qwen3-8B -> Qwen3-0.5B</td><td>指令解析的模型下限</td></tr>
+        <tr><td>去掉 Phase 2</td><td>跳过跨模态关联</td><td>跨模态关联的收益</td></tr>
+        <tr><td>Phase 2 换 VL 模型</td><td>Qwen3-VL-32B -> Qwen2.5-VL-7B</td><td>视觉理解的模型下限</td></tr>
+        <tr><td>去掉 Phase 3</td><td>不规划时间线直接生成</td><td>时序理解的必要性</td></tr>
+        <tr><td>去掉 Phase 4</td><td>跳过推理，直接组装</td><td>逻辑推理的收益</td></tr>
+        <tr><td>Phase 4 换非 R1</td><td>DeepSeek-R1 -> Qwen3-32B</td><td>CoT 推理的增益</td></tr>
+        <tr><td>去掉 Phase 5</td><td>直接输出 JSON</td><td>结构化输出的必要性</td></tr>
+        <tr><td>全部合并为单阶段</td><td>Qwen3-VL-32B 一次性生成</td><td>多阶段 vs 单阶段对比</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 资源需求 -->
+  <div class="section">
+    <h2>9. 资源需求</h2>
+    <table>
+      <thead>
+        <tr><th>组件</th><th>配置</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>H3-Base 推理</td><td>4x A100-80G</td><td>SGLang, ulysses-degree=4</td></tr>
+        <tr><td>Phase 2/3: Qwen3-VL-32B</td><td>2x A100-80G (BF16)</td><td>张量并行</td></tr>
+        <tr><td>Phase 1: Qwen3-8B</td><td>1x A100-80G</td><td>轻量文本模型</td></tr>
+        <tr><td>Phase 4: DeepSeek-R1-32B</td><td>1x A100-80G (INT8)</td><td>推理模型</td></tr>
+        <tr><td>Phase 5: Qwen3-32B</td><td>1x A100-80G</td><td>文本格式化</td></tr>
+        <tr><td>预处理</td><td>CPU</td><td>帧采样、Whisper 转写</td></tr>
+        <tr><td>存储</td><td>500GB SSD</td><td>模型权重 + 示例数据</td></tr>
+      </tbody>
+    </table>
+    <div class="highlight-box success">由于阶段串行执行，4 张 A100 可以分时复用，不需要同时加载所有模型。</div>
+  </div>
+
+  <!-- 关键设计决策 -->
+  <div class="section">
+    <h2>10. 关键设计决策</h2>
+    <ol>
+      <li><strong>每阶段独立选型</strong>：Phase 1/5 用轻量模型，Phase 2/3 用多模态模型，Phase 4 用推理模型，各取所长</li>
+      <li><strong>阶段间输出为结构化 JSON</strong>：便于程序化处理、校验、缓存，也便于跨阶段传递</li>
+      <li><strong>Phase 5 System Prompt 直接基于官方规范</strong>：确保输出格式与官方 100% 对齐</li>
+      <li><strong>预处理与 5 阶段流水线解耦</strong>：预处理可独立运行，支持增量处理</li>
+      <li><strong>模型管理器抽象</strong>：<code>model_manager.py</code> 统一管理模型加载/卸载/切换</li>
+      <li><strong>Ablation 评估机制</strong>：通过去除某个阶段或替换模型来验证每个组件的实际贡献</li>
+      <li><strong>保留官方单阶段方案作为对比基线</strong>：验证多阶段拆分的实际收益</li>
+    </ol>
+  </div>
+
+  <!-- PipelineContext 数据结构 -->
+  <div class="section">
+    <h2>11. 核心数据结构：PipelineContext</h2>
+    <pre>@dataclass
+class PipelineContext:
+    # 原始输入
+    raw_input: dict  # {content: [...], duration, ratio, model}
+    
+    # 预处理结果
+    preprocessed: dict  # {video_frames, audio_transcripts, scene_changes}
+    
+    # Phase 1 (Qwen3-8B)
+    parsed_instruction: dict  # 指令树
+    
+    # Phase 2 (Qwen3-VL-32B)
+    cross_modal_mapping: dict  # 跨模态映射
+    subject_definitions: list[str]  # Ref2VA 模式
+    
+    # Phase 3 (Qwen3-VL-32B)
+    shot_timeline: dict  # 镜头时间线
+    
+    # Phase 4 (DeepSeek-R1-32B)
+    retention_analysis: list[str]  # Ref2VA 模式
+    inferred_details: dict  # 推理补充
+    consistency_notes: dict  # 一致性校验
+    
+    # Phase 5 (Qwen3-32B)
+    final_prompt: str  # 结构化 prompt</pre>
+  </div>
+
+</div>
+
+<div class="footer">
+  <div class="container">
+    MiniMax H3-Context-IR 复现方案 &middot; 基于官方文档与 Prompt Writing Guide 分析 &middot; 2026
+  </div>
+</div>
+
+</body>
+</html>

@@ -469,7 +469,7 @@ skills/h3-prompt-writing/
       </div>
       <div class="card">
         <div class="card-title"><span class="badge badge-green">Step 1</span> qwen3.6-plus API</div>
-        <div class="card-desc">语义提取。新一代视觉语言模型，一次调用同时理解图片/视频帧。音频经本地预处理器（Whisper + 特征提取）转为文本描述后喂入。</div>
+        <div class="card-desc">语义提取。新一代视觉语言模型，一次调用同时理解图片/视频帧。音频经 Qwen3-Omni-Captioner 生成语义描述后喂入。</div>
       </div>
       <div class="card">
         <div class="card-title"><span class="badge badge-blue">Step 2</span> qwen3.6 API</div>
@@ -513,7 +513,7 @@ skills/h3-prompt-writing/
       <div class="preprocessor-block">
         <strong>本地预处理器（CPU，无 GPU）</strong><br>
         <span style="font-size:0.85em;color:var(--text-secondary);">
-          FFmpeg + PySceneDetect + Whisper + Demucs + librosa &nbsp;|&nbsp; 帧采样 · 场景切分 · 转写 · 音源分离 · 特征提取
+          FFmpeg + PySceneDetect + librosa + SpeechBrain + Qwen3-Omni-Captioner API &nbsp;|&nbsp; 帧采样 · 场景切分 · 音频语义理解 · 数值/音色特征提取
         </span>
       </div>
       <div class="pipeline-arrow"></div>
@@ -591,8 +591,8 @@ skills/h3-prompt-writing/
   <div class="section">
     <h2>4. 各阶段详细设计</h2>
 
-    <h3>本地预处理器（CPU 执行）</h3>
-    <p>对 Context-IR 的全部输入（prompt + 图像 + 视频 + 音频）进行统一的多模态预处理，输出结构化 JSON 供 Step 1 消费：</p>
+    <h3>本地预处理器（CPU + API 混合）</h3>
+    <p>对 Context-IR 的全部输入（prompt + 图像 + 视频 + 音频）进行统一的多模态预处理，输出结构化 JSON 供 Step 1 消费。音频采用 <strong>API 语义层 + 本地数值层</strong>混合策略：Qwen3-Omni-Captioner 负责语义理解（语音转写/情绪/环境声/音乐风格），本地工具负责音色与数值特征（Captioner 不支持音色/调性等细粒度声学分析，且输出为自由文本、无时间戳）：</p>
 
     <table>
       <thead>
@@ -610,32 +610,28 @@ skills/h3-prompt-writing/
           <td>Step 3 镜头分割参考</td>
         </tr>
         <tr>
-          <td>语音转写</td><td>Whisper / SenseVoice</td>
-          <td>带时间戳文本 + 语种 + 说话人标记</td>
-          <td>对话内容提取、说话人识别</td>
-        </tr>
-        <tr>
-          <td>音源分离</td><td>Demucs / Spleeter</td>
-          <td>人声 / BGM / 环境音 / SFX 分离</td>
-          <td>区分 diegetic 与非 diegetic</td>
-        </tr>
-        <tr>
-          <td>音乐特征提取</td>
-          <td>librosa / CLAP</td>
-          <td>BPM, 调性, 乐器, 风格, 响度曲线</td>
-          <td>non_diegetic_music 描述生成</td>
-        </tr>
-        <tr>
-          <td>声音事件检测</td>
-          <td>YAMNet / AudioSet</td>
-          <td>事件类型 + 时间戳（脚步声, 门铃, 风声...）</td>
-          <td>overall_soundscape 描述生成</td>
+          <td>音频语义理解</td>
+          <td>Qwen3-Omni-Captioner API</td>
+          <td>语音转写（含翻译）、说话人情绪、环境声/音效、音乐风格/乐器、敏感信息 → 英文语义描述</td>
+          <td>Step 1 音频语义、overall_soundscape</td>
         </tr>
         <tr>
           <td>音色特征提取</td>
           <td>SpeechBrain / ECAPA-TDNN</td>
           <td>说话人 embedding + 音色描述</td>
-          <td>Ref2VA 音频参考映射</td>
+          <td>Ref2VA 音频参考映射（Captioner 不支持音色分析）</td>
+        </tr>
+        <tr>
+          <td>音乐数值特征</td>
+          <td>librosa</td>
+          <td>BPM, 调性, 响度曲线</td>
+          <td>non_diegetic_music 数值补充</td>
+        </tr>
+        <tr>
+          <td>音源分离（可选）</td>
+          <td>Demucs / Spleeter</td>
+          <td>人声 / BGM / 环境音 / SFX 分离</td>
+          <td>区分 diegetic 与非 diegetic</td>
         </tr>
         <tr>
           <td>立体声分析</td>
@@ -663,7 +659,7 @@ skills/h3-prompt-writing/
       <li><strong>prompt</strong> → 任务参数、风格、镜头意图、对话/音效/音乐需求、参考引用关系</li>
       <li><strong>图像</strong> → 主体、场景、构图、色彩、风格、主体与背景关系</li>
       <li><strong>视频</strong> → 关键帧视觉描述、运动、摄影机运动、场景切换</li>
-      <li><strong>音频</strong> → 转写文本（本地 Whisper 输出）、音色描述、BGM 特征、声音事件</li>
+      <li><strong>音频</strong> → Captioner 语义描述（转写/情绪/环境声/音乐风格）、音色描述、BGM 数值特征</li>
     </ul>
     <pre>{
   "prompt_analysis": {
@@ -833,13 +829,11 @@ h3-context-ir/
 │   ├── video_sampler.py         # 视频帧采样（OpenCV/Decord）
 │   ├── scene_detector.py        # 场景切分检测（PySceneDetect）
 │   ├── task_classifier.py       # Step 0 任务区分（规则引擎）
-│   └── audio/                   # 音频分析子模块
+│   └── audio/                   # 音频分析子模块（数值/音色层）
 │       ├── __init__.py
-│       ├── transcriber.py       # 语音转写 (Whisper/SenseVoice)
-│       ├── source_separator.py  # 音源分离 (Demucs)
-│       ├── music_analyzer.py    # 音乐特征提取 (librosa/CLAP)
-│       ├── sound_event.py       # 声音事件检测 (YAMNet)
-│       ├── voice_analyzer.py    # 音色特征提取 (SpeechBrain)
+│       ├── voice_analyzer.py    # 音色特征提取 (SpeechBrain/ECAPA-TDNN)
+│       ├── music_analyzer.py    # 音乐数值特征 (librosa: BPM/调性/响度)
+│       ├── source_separator.py  # 音源分离 (Demucs, 可选)
 │       └── stereo_analyzer.py   # 立体声分析 (librosa)
 ├── pipeline/                    # 流水线核心（Step 1-5）
 │   ├── __init__.py
@@ -855,6 +849,7 @@ h3-context-ir/
 │   ├── base_client.py           # OpenAI 兼容接口封装（重试/超时/限流）
 │   ├── providers.py             # provider 配置（dashscope / deepseek / openai）
 │   ├── vl_client.py             # 多模态调用（图片/视频/音频 URL 或 Base64）
+│   ├── audio_captioner.py       # Qwen3-Omni-Captioner 音频语义理解（转写/情绪/环境声/音乐风格）
 │   ├── text_client.py           # 文本模型调用（qwen3.6 / deepseek-v4-flash）
 │   ├── media_uploader.py        # 媒体文件上传/URL 化（供 API 访问）
 │   └── output_validator.py      # 输出格式校验与自动修复
@@ -960,7 +955,7 @@ h3-context-ir/
         <tr><td>Step 4 换非 V4</td><td>deepseek-v4-flash -> qwen3.6</td><td>V4 推理能力的增益</td></tr>
         <tr><td>跳过 Step 5</td><td>直接输出 JSON</td><td>格式化输出的必要性</td></tr>
         <tr><td>全部合并为单阶段</td><td>qwen3.6 一次调用生成</td><td>多步骤 vs 单步骤对比</td></tr>
-        <tr><td>音频特征跳过</td><td>只用 Whisper 转写，不做音源分离/特征提取</td><td>音频分析模块的贡献</td></tr>
+        <tr><td>音频 Captioner 跳过</td><td>只用本地特征提取（音色/数值），不做语义理解</td><td>Qwen3-Omni-Captioner 的贡献</td></tr>
       </tbody>
     </table>
   </div>
@@ -978,8 +973,9 @@ h3-context-ir/
         <tr><th>组件</th><th>方案</th><th>说明</th></tr>
       </thead>
       <tbody>
-        <tr><td>本地预处理</td><td>CPU</td><td>帧采样、场景切分、Whisper 转写、Demucs 分离、特征提取</td></tr>
-        <tr><td>Step 1 语义提取</td><td>阿里云百炼</td><td>qwen3.6-plus API（多模态，支持图片/视频 URL；音频经本地预处理转文本）</td></tr>
+        <tr><td>本地预处理</td><td>CPU</td><td>帧采样、场景切分、音色/音乐数值/立体声特征提取（音频语义走 Captioner API）</td></tr>
+        <tr><td>音频语义理解</td><td>阿里云百炼</td><td>Qwen3-Omni-Captioner API（语音转写/情绪/环境声/音乐风格描述）</td></tr>
+        <tr><td>Step 1 语义提取</td><td>阿里云百炼</td><td>qwen3.6-plus API（多模态，支持图片/视频 URL；音频经 Captioner 转语义描述）</td></tr>
         <tr><td>Step 2 跨模态关联</td><td>阿里云百炼</td><td>qwen3.6 API（必要时回看原始媒体）</td></tr>
         <tr><td>Step 3/5</td><td>DeepSeek 开放平台</td><td>deepseek-v4-flash API（文本规划/组装）</td></tr>
         <tr><td>Step 4 逻辑校验</td><td>DeepSeek 开放平台</td><td>deepseek-v4-flash API（新一代推理模型）</td></tr>
@@ -1013,8 +1009,8 @@ h3-context-ir/
       <li><strong>语义提取与关联解耦，统一 qwen3.6 视觉模型</strong>：Step 1 只做素材理解（可并行），Step 2 必要时可回看原始媒体做对齐；Step 3-5 统一 deepseek-v4-flash 做文本规划/推理/组装，模型种类仅 2 个（qwen3.6 + deepseek-v4-flash）</li>
       <li><strong>API 调用替代本地推理</strong>：零 GPU 部署，按量付费，开发迭代成本低</li>
       <li><strong>统一 OpenAI 兼容客户端</strong>：<code>base_client.py</code> 抽象 provider，可随时切换 DashScope / DeepSeek / 其他平台</li>
-      <li><strong>预处理保留本地</strong>：转写/分离/特征提取没有现成 API 或 API 成本高，本地 CPU 工具链成熟且免费</li>
-      <li><strong>Step 4 使用推理模型</strong>：逻辑校验是质量上限所在，CoT 推理价值最大</li>
+      <li><strong>音频语义走 API、数值特征走本地</strong>：Qwen3-Omni-Captioner 输出固定英文自由文本（无法控制格式/无时间戳/不支持音色分析），因此 Captioner 负责语义层（转写/情绪/环境声/音乐风格），本地 librosa/SpeechBrain 负责数值与音色层，Step 1 由 qwen3.6 统一结构化为 JSON</li>
+      <li><strong>Step 4 使用推理模型</strong>：逻辑校验是质量上限所在，深度推理价值最大（deepseek-v4-flash）</li>
       <li><strong>Step 5 System Prompt 直接基于官方规范</strong>：确保输出格式与官方 100% 对齐</li>
       <li><strong>Ablation 评估机制</strong>：逐步骤移除/替换模型，验证每个组件的实际贡献</li>
     </ol>

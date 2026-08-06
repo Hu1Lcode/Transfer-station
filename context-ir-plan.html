@@ -359,7 +359,7 @@
     <div class="subtitle">6 步简化流水线 · qwen3.6 + DeepSeek-V4 API · 零 GPU 部署</div>
     <div class="meta">
       <span>流水线步数: 6</span>
-      <span>API 模型: 2</span>
+      <span>API 模型: 3</span>
       <span>本地 GPU: 0</span>
       <span>预估工期: 11 天</span>
     </div>
@@ -380,7 +380,7 @@
     <h3>架构决策：本地预处理 + API 推理</h3>
     <p>为节省资源，本方案<strong>不再自建 GPU 推理集群</strong>，改为：</p>
     <ul>
-      <li><strong>本地（CPU 即可）</strong>：视频帧采样、场景切分、音频转写、音源分离、特征提取等预处理工作 —— 这些是通用开源工具，无需 GPU</li>
+      <li><strong>本地（CPU 即可）</strong>：视频帧采样、场景切分、音色/数值/立体声特征提取等预处理工作 —— 通用开源工具，无需 GPU；音频语义理解（转写/情绪/环境声/音乐风格）由 Qwen3-Omni-Captioner API 完成</li>
       <li><strong>云端 API</strong>：全部 LLM/VLM 推理（语义提取、跨模态关联、Shot 规划、逻辑校验、格式化输出）通过模型服务 API 调用</li>
     </ul>
 
@@ -468,6 +468,10 @@ skills/h3-prompt-writing/
         <div class="card-desc">输入类型决定任务类型：仅文本 = T2VA；文本+图片 = I2VA；文本+图片+视频+音频 = FL2VA/Ref2VA。纯规则判断，零成本。</div>
       </div>
       <div class="card">
+        <div class="card-title"><span class="badge badge-gray">预处理</span> qwen3-omni-30b-a3b-captioner API</div>
+        <div class="card-desc">音频语义理解（预处理阶段）。语音转写（含翻译）、说话人情绪、环境声/音效、音乐风格/乐器、敏感信息 → 英文语义描述，供 Step 1 结构化为 JSON。</div>
+      </div>
+      <div class="card">
         <div class="card-title"><span class="badge badge-green">Step 1</span> qwen3.6-plus API</div>
         <div class="card-desc">语义提取。新一代视觉语言模型，一次调用同时理解图片/视频帧。音频经 Qwen3-Omni-Captioner 生成语义描述后喂入。</div>
       </div>
@@ -513,7 +517,15 @@ skills/h3-prompt-writing/
       <div class="preprocessor-block">
         <strong>本地预处理器（CPU，无 GPU）</strong><br>
         <span style="font-size:0.85em;color:var(--text-secondary);">
-          FFmpeg + PySceneDetect + librosa + SpeechBrain + Qwen3-Omni-Captioner API &nbsp;|&nbsp; 帧采样 · 场景切分 · 音频语义理解 · 数值/音色特征提取
+          FFmpeg + PySceneDetect + librosa + SpeechBrain &nbsp;|&nbsp; 帧采样 · 场景切分 · 数值/音色特征提取
+        </span>
+      </div>
+      <div class="pipeline-arrow"></div>
+
+      <div class="preprocessor-block" style="background:#f3e5f5;border-color:#9c27b0;">
+        <strong>Qwen3-Omni-Captioner API（音频语义理解）</strong><br>
+        <span style="font-size:0.85em;color:var(--text-secondary);">
+          语音转写/情绪/环境声/音乐风格 → 英文语义描述（转交 Step 1 结构化）
         </span>
       </div>
       <div class="pipeline-arrow"></div>
@@ -591,8 +603,8 @@ skills/h3-prompt-writing/
   <div class="section">
     <h2>4. 各阶段详细设计</h2>
 
-    <h3>本地预处理器（CPU + API 混合）</h3>
-    <p>对 Context-IR 的全部输入（prompt + 图像 + 视频 + 音频）进行统一的多模态预处理，输出结构化 JSON 供 Step 1 消费。音频采用 <strong>API 语义层 + 本地数值层</strong>混合策略：Qwen3-Omni-Captioner 负责语义理解（语音转写/情绪/环境声/音乐风格），本地工具负责音色与数值特征（Captioner 不支持音色/调性等细粒度声学分析，且输出为自由文本、无时间戳）：</p>
+    <h3>本地预处理器（CPU）+ 音频语义 API</h3>
+    <p>对 Context-IR 的全部输入（prompt + 图像 + 视频 + 音频）进行统一的多模态预处理，输出结构化 JSON 供 Step 1 消费。音频采用 <strong>API 语义层 + 本地数值层</strong>：Qwen3-Omni-Captioner（独立 API 模型，见模型卡片）负责语义理解（语音转写/情绪/环境声/音乐风格），本地工具负责音色与数值特征（Captioner 不支持音色/调性等细粒度声学分析，且输出为自由文本、无时间戳）：</p>
 
     <table>
       <thead>
@@ -611,8 +623,8 @@ skills/h3-prompt-writing/
         </tr>
         <tr>
           <td>音频语义理解</td>
-          <td>Qwen3-Omni-Captioner API</td>
-          <td>语音转写（含翻译）、说话人情绪、环境声/音效、音乐风格/乐器、敏感信息 → 英文语义描述</td>
+          <td>qwen3-omni-30b-a3b-captioner API</td>
+          <td>语音转写（含翻译）、说话人情绪、环境声/音效、音乐风格/乐器、敏感信息 → 英文语义描述（单次上限 ~43 分钟，超长自动切段）</td>
           <td>Step 1 音频语义、overall_soundscape</td>
         </tr>
         <tr>
@@ -876,9 +888,9 @@ h3-context-ir/
         <div class="tl-title">第 1 天：环境准备 + API 接入 <span class="tl-days">1 天</span></div>
         <div class="tl-desc">
           <ul>
-            <li>注册阿里云百炼（DashScope）获取 qwen3.6-plus / qwen3.6-flash API Key</li>
+            <li>注册阿里云百炼（DashScope）获取 qwen3.6-plus / qwen3.6-flash + qwen3-omni-30b-a3b-captioner API Key</li>
             <li>注册 DeepSeek 开放平台获取 deepseek-v4-flash API Key</li>
-            <li>验证多模态 API 支持：图片/视频/音频 URL 直传能力</li>
+            <li>验证多模态 API 支持：图片/视频 URL 直传 + Captioner 音频理解</li>
             <li>搭建项目骨架 + 编写 <code>collect_official_samples.py</code></li>
           </ul>
         </div>
@@ -887,7 +899,7 @@ h3-context-ir/
         <div class="tl-title">第 2-3 天：本地预处理器 + Step 0 <span class="tl-days">2 天</span></div>
         <div class="tl-desc">
           <ul>
-            <li>实现 <code>video_sampler.py</code>、<code>scene_detector.py</code>、音频分析 6 模块</li>
+            <li>实现 <code>video_sampler.py</code>、<code>scene_detector.py</code>、音频数值/音色模块 + <code>audio_captioner.py</code></li>
             <li>实现 <code>task_classifier.py</code>（规则引擎）</li>
             <li>实现 <code>media_uploader.py</code>（本地文件 → 可访问 URL）</li>
           </ul>
@@ -897,7 +909,7 @@ h3-context-ir/
         <div class="tl-title">第 4-5 天：API 客户端 + Step 1-3 <span class="tl-days">2 天</span></div>
         <div class="tl-desc">
           <ul>
-            <li>实现 <code>base_client.py</code> + <code>providers.py</code> + <code>vl_client.py</code> + <code>text_client.py</code></li>
+            <li>实现 <code>base_client.py</code> + <code>providers.py</code> + <code>vl_client.py</code> + <code>text_client.py</code> + <code>audio_captioner.py</code></li>
             <li>实现 Step 1 语义提取（含多模态输入组装）</li>
             <li>实现 Step 2 跨模态关联、Step 3 Shot 分割与描述</li>
             <li>编写对应 System Prompt 模板</li>
@@ -995,10 +1007,11 @@ h3-context-ir/
         <tr><td>Step 3 Shot 规划</td><td>3K</td><td>2K</td><td>¥0.007</td></tr>
         <tr><td>Step 4 逻辑校验 (V4)</td><td>4K</td><td>3K</td><td>¥0.01</td></tr>
         <tr><td>Step 5 格式化输出</td><td>6K</td><td>4K</td><td>¥0.014</td></tr>
-        <tr><td><strong>合计</strong></td><td><strong>~18K</strong></td><td><strong>~11K</strong></td><td><strong>~¥0.06/任务</strong></td></tr>
+        <tr><td>音频语义理解 (Captioner)</td><td>0.2K（10s 音频 ≈ 125 token）</td><td>0.4K</td><td>¥0.007</td></tr>
+        <tr><td><strong>合计</strong></td><td><strong>~18K</strong></td><td><strong>~11.5K</strong></td><td><strong>~¥0.07/任务</strong></td></tr>
       </tbody>
     </table>
-    <p style="font-size:0.85em;color:var(--text-secondary);">价格按 2026 年公开 API 定价估算（deepseek-v4-flash：输入 1 元/百万 token、输出 2 元/百万 token，缓存命中输入仅 0.02 元），实际以各平台实时价格为准。批量开发测试 1000 个样本约 ¥60。</p>
+    <p style="font-size:0.85em;color:var(--text-secondary);">价格按 2026 年公开 API 定价估算（deepseek-v4-flash：输入 1 元/百万 token、输出 2 元/百万 token，缓存命中输入仅 0.02 元），实际以各平台实时价格为准。批量开发测试 1000 个样本约 ¥65。</p>
   </div>
 
   <!-- 关键设计决策 -->
@@ -1006,7 +1019,7 @@ h3-context-ir/
     <h2>9. 关键设计决策</h2>
     <ol>
       <li><strong>任务区分规则化</strong>：输入类型直接决定任务类型，无需模型推理，零成本</li>
-      <li><strong>语义提取与关联解耦，统一 qwen3.6 视觉模型</strong>：Step 1 只做素材理解（可并行），Step 2 必要时可回看原始媒体做对齐；Step 3-5 统一 deepseek-v4-flash 做文本规划/推理/组装，模型种类仅 2 个（qwen3.6 + deepseek-v4-flash）</li>
+      <li><strong>语义提取与关联解耦，统一 qwen3.6 视觉模型</strong>：Step 1 只做素材理解（可并行），Step 2 必要时可回看原始媒体做对齐；Step 3-5 统一 deepseek-v4-flash 做文本规划/推理/组装，模型种类共 3 个（qwen3.6 + deepseek-v4-flash + qwen3-omni-30b-a3b-captioner）</li>
       <li><strong>API 调用替代本地推理</strong>：零 GPU 部署，按量付费，开发迭代成本低</li>
       <li><strong>统一 OpenAI 兼容客户端</strong>：<code>base_client.py</code> 抽象 provider，可随时切换 DashScope / DeepSeek / 其他平台</li>
       <li><strong>音频语义走 API、数值特征走本地</strong>：Qwen3-Omni-Captioner 输出固定英文自由文本（无法控制格式/无时间戳/不支持音色分析），因此 Captioner 负责语义层（转写/情绪/环境声/音乐风格），本地 librosa/SpeechBrain 负责数值与音色层，Step 1 由 qwen3.6 统一结构化为 JSON</li>
@@ -1028,7 +1041,7 @@ class PipelineContext:
     task_type: str   # t2va / i2va / fl2va / ref2va
     media_roles: dict  # {素材 id → role: first_frame / reference_video / voice_timbre ...}
 
-    # 预处理结果（本地 CPU）
+    # 预处理结果（本地 CPU + Captioner API）
     preprocessed: dict  # {video_frames, scene_changes, audio_analysis}
 
     # Step 1 (qwen3.6-plus API)

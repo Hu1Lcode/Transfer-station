@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VeRL-Omni 项目结构解剖</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink-soft:#475569; --muted:#64748b;
+    --bg:#f6f8fb; --card:#ffffff; --line:#e2e8f0;
+    --accent:#6366f1; --accent2:#06b6d4;
+    --grad:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#06b6d4 100%);
+    --radius:16px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.75}
+  .progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--grad);z-index:100;transition:width .1s linear}
+
+  nav{position:sticky;top:0;z-index:90;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-inner{max-width:1060px;margin:0 auto;display:flex;align-items:center;gap:4px;padding:10px 20px;flex-wrap:wrap}
+  .nav-brand{font-weight:800;margin-right:12px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:15px}
+  nav a{text-decoration:none;color:var(--ink-soft);font-size:13.5px;font-weight:600;padding:6px 11px;border-radius:999px;transition:.2s}
+  nav a:hover{background:#eef2ff;color:var(--accent)}
+  nav a.active{background:#eef2ff;color:var(--accent)}
+
+  header{background:radial-gradient(1200px 500px at 15% -10%,rgba(99,102,241,.45),transparent 60%),radial-gradient(900px 420px at 92% 8%,rgba(6,182,212,.32),transparent 60%),#0b1120;color:#f1f5f9;padding:68px 20px 58px}
+  .hero{max-width:1060px;margin:0 auto}
+  .hero .kicker{letter-spacing:.24em;font-size:12px;font-weight:700;color:#a5b4fc;text-transform:uppercase}
+  .hero h1{font-size:clamp(28px,4.6vw,44px);font-weight:900;margin:14px 0 8px;line-height:1.25}
+  .hero h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{color:#cbd5e1;font-size:16px;max-width:840px;margin-top:10px}
+  .hero .meta{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap}
+  .hero .tag{font-size:13px;padding:6px 14px;border:1px solid rgba(148,163,184,.4);border-radius:999px;color:#e2e8f0;background:rgba(148,163,184,.08)}
+  .hero .tag b{color:#7dd3fc;font-weight:700}
+
+  main{max-width:1060px;margin:0 auto;padding:0 20px 90px}
+  section{padding-top:56px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{flex:none;width:42px;height:42px;border-radius:12px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;box-shadow:0 8px 20px rgba(99,102,241,.35)}
+  h2{font-size:26px;font-weight:800}
+  .sec-sub{color:var(--muted);font-size:15px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px;margin-bottom:22px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  h3{font-size:19px;font-weight:800;margin:0 0 12px}
+  h4{font-size:15px;font-weight:800;margin:18px 0 8px;color:#312e81}
+  .muted{color:var(--muted)}
+  .em{color:var(--accent);font-weight:700}
+  code,.code{font-family:var(--mono);font-size:13px;background:#f1f5f9;padding:2px 6px;border-radius:5px}
+
+  /* 统计条 */
+  .statbar{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:820px){.statbar{grid-template-columns:repeat(2,1fr)}}
+  .statbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .statbox b{display:block;font-size:22px;font-weight:900;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.3}
+  .statbox span{font-size:12.5px;color:var(--muted)}
+
+  /* 目录树 */
+  .tree{background:#0b1120;color:#e2e8f0;border-radius:14px;padding:22px 24px;font-family:var(--mono);font-size:12.8px;line-height:1.95;overflow-x:auto;white-space:pre}
+  .tree .d{color:#7dd3fc;font-weight:700}
+  .tree .f{color:#e2e8f0}
+  .tree .c{color:#64748b}
+  .tree .hl{color:#fca5a5}
+  .tree .g{color:#86efac}
+  @media(max-width:760px){ .tree{font-size:11.4px;line-height:1.8} }
+
+  /* LOC 柱状 */
+  .bars{margin-top:6px}
+  .barrow{display:grid;grid-template-columns:120px 1fr 96px;gap:12px;align-items:center;margin-bottom:9px;font-size:13.5px}
+  .barrow .nm{font-family:var(--mono);font-size:12.5px;color:#4338ca;font-weight:600}
+  .bartrack{background:#eef2ff;border-radius:999px;height:18px;overflow:hidden}
+  .barfill{height:100%;background:var(--grad);border-radius:999px}
+  .barrow .val{text-align:right;color:var(--muted);font-size:12.5px;font-family:var(--mono)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}
+  th,td{padding:11px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+  th{background:#f1f5f9;font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:12.3px;overflow-wrap:anywhere}
+  /* 窄屏：表格改为可横向滚动的块，避免长代码路径把页面撑破 */
+  @media(max-width:820px){
+    table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  }
+
+  .layers{display:flex;flex-direction:column;gap:8px}
+  .layer{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  @media(max-width:760px){.layer{grid-template-columns:1fr}}
+  .layer .lname{font-size:13px;font-weight:800;color:#4338ca}
+  .layer .lbody{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:12.8px;padding:6px 12px;border-radius:9px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-weight:600;font-family:var(--mono)}
+  .chip.c{background:#ecfeff;border-color:#a5f3fc;color:#0e7490}
+  .chip.g{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .chip.v{background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9}
+  .chip.grey{background:#f1f5f9;border-color:#e2e8f0;color:#475569}
+
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:14px 0 4px}
+  .step{flex:1 1 150px;min-width:150px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.3px}
+  .step b{display:block;font-size:13px;margin-bottom:3px}
+  .step span{color:var(--muted);display:block;line-height:1.5}
+  .step.hot{background:linear-gradient(135deg,#eef2ff,#ecfeff);border-color:#a5b4fc}
+  .step.hot b{color:#4338ca}
+  .flow .arrow{align-self:center;color:#94a3b8;font-size:17px;font-weight:700;flex:none}
+
+  .callout{border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;color:#fff;background:linear-gradient(135deg,#312e81,#4338ca 60%,#0e7490);box-shadow:0 12px 30px rgba(49,46,129,.32)}
+  .callout .t{font-weight:800;font-size:13.5px;letter-spacing:.1em;opacity:.85;margin-bottom:3px}
+  .callout p{font-size:16px;line-height:1.75}
+
+  .snippet{background:#0b1120;color:#e2e8f0;border-radius:12px;padding:16px 20px;font-family:var(--mono);font-size:12.8px;line-height:1.85;overflow-x:auto;white-space:pre;margin:10px 0}
+  .snippet .k{color:#c4b5fd}
+  .snippet .s{color:#86efac}
+  .snippet .c{color:#64748b}
+
+  footer{border-top:1px solid var(--line);background:#fff}
+  .foot{max-width:1060px;margin:0 auto;padding:28px 20px;color:var(--muted);font-size:13px}
+  .foot a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">VeRL-Omni 结构解剖</span>
+    <a href="#overview" data-spy>总览</a>
+    <a href="#tree" data-spy>目录树</a>
+    <a href="#layers" data-spy>分层</a>
+    <a href="#modules" data-spy>模块逐个看</a>
+    <a href="#extend" data-spy>扩展点</a>
+    <a href="#ops" data-spy>工程化</a>
+  </div>
+</nav>
+
+<header>
+  <div class="hero">
+    <div class="kicker">Source Code Anatomy · v0.2.0rc1</div>
+    <h1>VeRL-Omni <span class="g">项目结构解剖</span></h1>
+    <p class="sub">对 <code style="background:rgba(148,163,184,.15);color:#7dd3fc">verl-project/verl-omni</code> 仓库做了一次逐目录通读：646 个文件、主包 196 个 Python 文件 / 47,031 行代码。核心结论是——它把「RL 编排 / 执行引擎 / 模型适配 / 奖励计算」四件事彻底分层，并用<b>注册表 + 适配器</b>两套机制支撑 17 个模型、11 类 trainer 的组合爆炸。</p>
+    <div class="meta">
+      <span class="tag">版本 <b>0.2.0rc1</b></span>
+      <span class="tag">Python <b>407</b> 文件</span>
+      <span class="tag">主包 <b>47k</b> 行</span>
+      <span class="tag">测试 <b>39k</b> 行</span>
+      <span class="tag">Shell 脚本 <b>92</b> 个</span>
+      <span class="tag">Hydra 配置 <b>29</b> 个</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 总览 -->
+  <section id="overview">
+    <div class="sec-head"><div class="sec-num">①</div><h2>仓库总览</h2></div>
+    <p class="sec-sub">顶层是「主包 + 示例 + 测试 + 文档 + 容器」五件套，主包之外几乎不含逻辑。</p>
+
+    <div class="statbar">
+      <div class="statbox"><b>196</b><span>主包 .py 文件</span></div>
+      <div class="statbox"><b>47,031</b><span>主包代码行数</span></div>
+      <div class="statbox"><b>184</b><span>测试文件（39,310 行）</span></div>
+      <div class="statbox"><b>17</b><span>已接入的模型 pipeline</span></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3>顶层目录职责</h3>
+      <table>
+        <thead><tr><th style="width:20%">目录 / 文件</th><th>内容与职责</th></tr></thead>
+        <tbody>
+          <tr><td><code>verl_omni/</code></td><td><b>唯一的代码主包</b>：196 个 py、47,031 行，所有框架逻辑都在这里</td></tr>
+          <tr><td><code>examples/</code></td><td>11 个 trainer 目录、<b>68 个启动脚本</b>、18 篇 README；每个模型一份可跑的 shell 配方</td></tr>
+          <tr><td><code>tests/</code></td><td>184 个 py / 39,310 行，分 11 类：<code>gpu_smoke</code>、<code>npu_smoke</code>、<code>special_e2e</code>、<code>special_sanity</code>、<code>nightly</code>、<code>pipelines</code>…</td></tr>
+          <tr><td><code>docs/</code></td><td>59 篇 md，Sphinx 组织：<code>algo</code> / <code>api</code> / <code>perf</code> / <code>start</code> / <code>community</code> / <code>contributing</code></td></tr>
+          <tr><td><code>docker/</code></td><td><code>Dockerfile.cuda</code>、<code>Dockerfile.a2.npu</code>、<code>Dockerfile.a3.npu</code> —— NPU 有独立的 A2/A3 镜像</td></tr>
+          <tr><td><code>scripts/</code></td><td><code>diagnose.py</code>（环境体检）、<code>generate_trainer_config.sh</code>（生成配置）、<code>print_cfg.py</code>（打印最终配置）</td></tr>
+          <tr><td><code>AGENTS.md</code></td><td>给 AI coding agent 的贡献规范（去重检查、PR 标题格式、commit 规范、fail-closed 要求），<code>CLAUDE.md</code> 是指向它的软链</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>主包代码量分布</h3>
+      <div class="bars">
+        <div class="barrow"><span class="nm">pipelines/</span><span class="bartrack"><span class="barfill" style="width:100%"></span></span><span class="val">18,016 行</span></div>
+        <div class="barrow"><span class="nm">utils/</span><span class="bartrack"><span class="barfill" style="width:62%"></span></span><span class="val">11,251 行</span></div>
+        <div class="barrow"><span class="nm">trainer/</span><span class="bartrack"><span class="barfill" style="width:44%"></span></span><span class="val">8,001 行</span></div>
+        <div class="barrow"><span class="nm">workers/</span><span class="bartrack"><span class="barfill" style="width:43%"></span></span><span class="val">7,715 行</span></div>
+        <div class="barrow"><span class="nm">agent_loop/</span><span class="bartrack"><span class="barfill" style="width:8%"></span></span><span class="val">1,401 行</span></div>
+        <div class="barrow"><span class="nm">reward_loop/</span><span class="bartrack"><span class="barfill" style="width:4%"></span></span><span class="val">604 行</span></div>
+        <div class="barrow"><span class="nm">models/</span><span class="bartrack"><span class="barfill" style="width:1%"></span></span><span class="val">13 行</span></div>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:14px"><b>读代码的性价比提示</b>：想理解这个项目，先看 <code>trainer/</code>（编排骨架）和 <code>pipelines/</code>（模型适配契约）；<code>utils/</code> 虽然行数排第二，但大部分是数据集与工具函数，可以最后看。</p>
+    </div>
+  </section>
+
+  <!-- 目录树 -->
+  <section id="tree">
+    <div class="sec-head"><div class="sec-num">②</div><h2>目录树（带职责注释）</h2></div>
+    <p class="sec-sub">把整棵树的骨架和每个目录的定位一次看完。</p>
+
+    <div class="card">
+      <div class="tree"><span class="d">verl-omni/</span>
+├── <span class="d">verl_omni/</span>                          <span class="c"># 主包 196 py / 47,031 行</span>
+│   ├── <span class="d">trainer/</span>   <span class="c">22 py / 8,001 行</span>   <span class="c"># ① 编排层：入口 + Ray trainer + 算法</span>
+│   │   ├── <span class="f">main_diffusion.py</span>              <span class="hl"># 入口 A：扩散 RL（47 个脚本在用）</span>
+│   │   ├── <span class="f">main_diffusion_v1.py</span>           <span class="hl"># 入口 B：V1 架构（sync / separate-async）</span>
+│   │   ├── <span class="f">main_omni.py</span>                    <span class="hl"># 入口 C：全模态（Qwen3-Omni / TTS）</span>
+│   │   ├── <span class="d">config/</span>                        <span class="c"># Hydra 配置树 + _generated_*.yaml</span>
+│   │   ├── <span class="d">diffusion/</span>                     <span class="c"># 算法注册表 / 指标 / 校正 / 蒸馏</span>
+│   │   │   ├── <span class="f">diffusion_algos.py</span>         <span class="hl"># ★ 算法扩展点（loss + advantage 注册表）</span>
+│   │   │   ├── <span class="f">ray_diffusion_trainer.py</span>   <span class="c"># ★ 训练编排主体（1600+ 行）</span>
+│   │   │   ├── <span class="f">rollout_correction.py</span>       <span class="c"># 跳过 logP 重算的校正</span>
+│   │   │   ├── <span class="f">teacher_manager.py</span>          <span class="c"># 蒸馏用 teacher</span>
+│   │   │   └── <span class="d">v1/</span>                         <span class="c"># TransferQueue 异步训练（tq_utils / trainer_*）</span>
+│   │   └── <span class="d">omni/</span>                           <span class="c"># omni_algos + ray_omni_trainer(_separate_async)</span>
+│   ├── <span class="d">workers/</span>   <span class="c">37 py / 7,715 行</span>   <span class="c"># ② 执行层：训练引擎 + rollout 引擎</span>
+│   │   ├── <span class="d">engine/fsdp/</span>                    <span class="c"># 后端 A：diffusers_impl.py / omni_impl.py</span>
+│   │   ├── <span class="d">engine/veomni/</span>                  <span class="c"># 后端 B：diffusion_impl.py（对接 VeOmni）</span>
+│   │   ├── <span class="d">rollout/vllm_rollout/</span>           <span class="c"># vLLM-Omni 异步 HTTP server + 生成策略</span>
+│   │   │   ├── <span class="f">vllm_omni_async_server.py</span>   <span class="c"># vLLMOmniHttpServer / vLLMOmniReplica</span>
+│   │   │   ├── <span class="f">vllm_omni_diffusion_strategy.py</span> <span class="c"># 扩散生成策略</span>
+│   │   │   ├── <span class="f">vllm_omni_ar_strategy.py</span>  <span class="c"># 自回归生成策略</span>
+│   │   │   ├── <span class="f">zmq_utils.py</span> / <span class="f">npu_utils.py</span> <span class="c"># 进程间通信 / NPU 适配</span>
+│   │   └── <span class="d">config/</span>   <span class="c"># diffusion/ 与 omni/ 的 worker 配置</span>
+│   ├── <span class="d">pipelines/</span> <span class="c">76 py / 18,016 行</span>  <span class="c"># ③ 模型适配层（最大的一块）</span>
+│   │   ├── <span class="f">model_base.py</span>                   <span class="hl"># ★ 契约：DiffusionModelBase / OmniModelBase / VllmOmniPipelineBase</span>
+│   │   ├── <span class="f">non_diffusers_model_base.py</span>    <span class="c"># 非 diffusers 模型的基类（nn.Module）</span>
+│   │   ├── <span class="f">rollout_request.py</span> / <span class="f">rollout_media.py</span> / <span class="f">request_batch.py</span> <span class="c"># 请求/媒体数据抽象</span>
+│   │   ├── <span class="d">schedulers/flow_match_sde.py</span>    <span class="c"># 流匹配的 SDE 采样调度</span>
+│   │   └── <span class="d">&lt;model&gt;/</span>                        <span class="c"># 17 个模型目录，各自「三件套」</span>
+│   ├── <span class="d">reward_loop/</span> <span class="c">7 py / 604 行</span>     <span class="c"># ④ 奖励层</span>
+│   │   ├── <span class="f">reward_loop.py</span> / <span class="f">local_accelerator_reward_loop.py</span>
+│   │   └── <span class="d">reward_manager/</span>                 <span class="c"># visual.py / audio.py / multi.py（按模态分）</span>
+│   ├── <span class="d">agent_loop/</span> <span class="c">6 py / 1,401 行</span>    <span class="c"># ⑤ 多步 / agent 化 rollout</span>
+│   │   ├── <span class="f">diffusion_agent_loop.py</span> / <span class="f">diffusion_agent_loop_tq.py</span>
+│   │   └── <span class="f">composite_agent_loop.py</span> / <span class="f">single_turn_agent_loop.py</span>
+│   └── <span class="d">utils/</span>     <span class="c">46 py / 11,251 行</span>  <span class="c"># ⑥ 工具层</span>
+│       ├── <span class="f">config.py</span> / <span class="f">fsdp_utils.py</span> / <span class="f">metrics_utils.py</span> / <span class="f">tracking.py</span>
+│       ├── <span class="d">vllm_omni/</span>                      <span class="c"># 与 vLLM-Omni 的桥接工具</span>
+│       ├── <span class="d">reward_score/</span>                   <span class="c"># ★ 15 个奖励实现（见下文）</span>
+│       ├── <span class="d">dataset/</span>   <span class="c"># rl_dataset / omni_rl_datasets / offline_dpo…</span>
+│       └── <span class="d">mfu/</span> <span class="f">diffusion_attention.py</span> <span class="f">net_utils.py</span> <span class="f">fs.py</span>
+├── <span class="d">examples/</span>        <span class="c"># 11 个 trainer 目录 · 68 个脚本 · 18 篇 README</span>
+├── <span class="d">tests/</span>           <span class="c"># 184 py / 39,310 行（比主包还密的测试）</span>
+├── <span class="d">docs/</span>            <span class="c"># 59 篇 md（Sphinx）</span>
+├── <span class="d">docker/</span>          <span class="c"># CUDA + A2/A3 NPU 三套镜像</span>
+└── <span class="d">scripts/</span>         <span class="c"># diagnose / generate_trainer_config / print_cfg</span></div>
+    </div>
+  </section>
+
+  <!-- 分层 -->
+  <section id="layers">
+    <div class="sec-head"><div class="sec-num">③</div><h2>分层架构：一次训练的调用链</h2></div>
+    <p class="sec-sub">从 shell 脚本到 GPU kernel，中间经过五层。</p>
+
+    <div class="card">
+      <div class="layers">
+        <div class="layer"><div class="lname">启动脚本层</div><div class="lbody"><span class="chip grey">examples/**/*.sh</span><span class="chip grey">68 个配方</span></div></div>
+        <div class="layer"><div class="lname">入口层</div><div class="lbody"><span class="chip">main_diffusion</span><span class="chip">main_diffusion_v1</span><span class="chip">main_omni</span><span class="chip grey">Hydra 组装配置</span></div></div>
+        <div class="layer"><div class="lname">编排层</div><div class="lbody"><span class="chip v">RayDiffusionTrainer</span><span class="chip v">PolicyGradient / DirectPreference</span><span class="chip v">RayOmniTrainer</span><span class="chip grey">AgentLoopManager</span></div></div>
+        <div class="layer"><div class="lname">执行层（workers）</div><div class="lbody"><span class="chip c">engine/fsdp</span><span class="chip c">engine/veomni</span><span class="chip c">rollout/vllm_rollout</span></div></div>
+        <div class="layer"><div class="lname">模型适配层</div><div class="lbody"><span class="chip g">pipelines/&lt;model&gt;/</span><span class="chip g">*_training_adapter</span><span class="chip g">*_rollout_adapter</span></div></div>
+        <div class="layer"><div class="lname">奖励层</div><div class="lbody"><span class="chip grey">utils/reward_score（15 个）</span><span class="chip grey">reward_loop/reward_manager</span></div></div>
+      </div>
+
+      <h4>一个训练 step 的数据流</h4>
+      <div class="flow">
+        <div class="step"><b>① 采样 prompt</b><span>dataset → request（PromptBundle / MediaInput）</span></div>
+        <div class="arrow">→</div>
+        <div class="step hot"><b>② rollout</b><span>vLLMOmniHttpServer 异步生成一组图/视频/音频，返回 latent 与 logP</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>③ 奖励</b><span>reward_manager（visual/audio/multi）调用 reward_score 打分，可异步重叠</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>④ 优势估计</b><span>按 prompt 分组归一化（组相对优势）</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>⑤ 策略更新</b><span>FSDP / VeOmni 引擎算 loss、反传、更新权重</span></div>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:12px">V1 架构（<code>trainer/diffusion/v1/</code>）把这条链拆得更开：rollout 与训练跑在<b>不同进程池</b>，中间用 <b>TransferQueue</b>（<code>TransferQueue==0.1.8</code>，写进 pyproject 依赖）传递数据，对应 <code>trainer_separate_async.py</code>。</p>
+    </div>
+  </section>
+
+  <!-- 模块逐个看 -->
+  <section id="modules">
+    <div class="sec-head"><div class="sec-num">④</div><h2>模块逐个看</h2></div>
+    <p class="sec-sub">每个子包的职责、关键文件、以及它在架构里的角色。</p>
+
+    <div class="card">
+      <h3>1) <code>trainer/</code> —— 编排层</h3>
+      <table>
+        <thead><tr><th style="width:34%">文件</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td><code>main_diffusion.py</code> (378 行)</td><td>扩散 RL 主入口。<code>@hydra.main(config_path="./config", config_name="diffusion_trainer")</code>，解析配置后按 <code>_get_trainer_cls(config)</code> 选出 trainer 类并跑 <code>run_diffusion()</code>；内置 nsight profiling 支持</td></tr>
+          <tr><td><code>main_diffusion_v1.py</code></td><td>V1 架构入口（TransferQueue 流水线，支持 sync 与 separate-async）</td></tr>
+          <tr><td><code>main_omni.py</code></td><td>全模态入口（Qwen3-Omni thinker/talker、Qwen3-TTS）</td></tr>
+          <tr><td><code>diffusion/ray_diffusion_trainer.py</code></td><td><b>编排核心</b>：<code>BaseRayDiffusionTrainer(ABC)</code> → <code>PolicyGradientRayTrainer</code>（GRPO/DPPO 系）与 <code>DirectPreferenceRayTrainer</code>（DPO 系）；负责 <code>init_workers()</code>、<code>fit()</code>、dataloader 构造，并把 agent loop worker 注册成 Ray actor</td></tr>
+          <tr><td><code>diffusion/diffusion_algos.py</code></td><td><b>算法扩展点</b>：loss 注册表 + 优势估计注册表（详见下一节）</td></tr>
+          <tr><td><code>diffusion/rollout_correction.py</code> / <code>teacher_manager.py</code></td><td>rollout 校正（跳过 logP 重算）、蒸馏 teacher 管理</td></tr>
+          <tr><td><code>omni/ray_omni_trainer.py</code> / <code>ray_omni_trainer_separate_async.py</code></td><td>全模态训练编排，含「训练与 rollout 分离的异步」变体</td></tr>
+          <tr><td><code>config/</code></td><td>Hydra 配置组：<code>diffusion/{actor,engine,model,model_engine,ref,rollout,distillation}</code>、<code>omni/model</code>、<code>optim</code>、<code>reward</code>、<code>profiler</code>，另有 4 份 <code>_generated_*</code> 汇总配置（由脚本生成，勿手改）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>2) <code>workers/</code> —— 执行层</h3>
+      <p class="muted" style="font-size:14px;margin-bottom:10px">这一层回答「用什么算」：训练后端 × rollout 引擎，各自独立可换。</p>
+      <div class="flow">
+        <div class="step hot"><b>engine/fsdp/</b><span><code>diffusers_impl.py</code>（扩散）与 <code>omni_impl.py</code>（全模态）——基于 FSDP 的默认训练后端</span></div>
+        <div class="arrow">+</div>
+        <div class="step hot"><b>engine/veomni/</b><span><code>diffusion_impl.py</code>——把 VeOmni 当作训练后端接进来（对应 64 卡配方）</span></div>
+        <div class="arrow">+</div>
+        <div class="step"><b>rollout/vllm_rollout/</b><span><code>vLLMOmniHttpServer</code> / <code>vLLMOmniReplica</code> 继承 verl 原有 server/replica；<code>diffusion_strategy</code> 与 <code>ar_strategy</code> 分别处理扩散与自回归生成；<code>zmq_utils</code> 做进程间通信，<code>npu_utils</code> 做 NPU 适配</span></div>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:12px"><code>workers/config/</code> 下按 <code>diffusion/</code> 与 <code>omni/</code> 分目录存放 worker 侧配置；<code>checkpoint_engine.py</code>、<code>engine_workers.py</code>、<code>omni_engine_workers.py</code> 负责 checkpoint 与 worker 生命周期。</p>
+    </div>
+
+    <div class="card">
+      <h3>3) <code>pipelines/</code> —— 模型适配层（最大的一块，18k 行）</h3>
+      <p style="font-size:14.5px">这里是<b>「新增一个模型」的唯一落点</b>。抽象基类集中在 <code>model_base.py</code>：</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px">
+        <span class="chip">DiffusionModelBase(ABC)</span>
+        <span class="chip">DiffusionI2IModelBase</span>
+        <span class="chip">OmniModelBase(ABC)</span>
+        <span class="chip">VllmOmniPipelineBase</span>
+        <span class="chip">OmniRolloutPipelineBase</span>
+        <span class="chip">NonDiffusersModelBase</span>
+      </div>
+      <h4>每个模型目录的「三件套」模式</h4>
+      <div class="snippet"><span class="c"># 绝大多数扩散模型目录的结构（以 qwen_image_flow_grpo 为例）</span>
+pipelines/&lt;model&gt;/
+├── common.py                        <span class="c"># 模型常量、prompt 模板、共享工具</span>
+├── diffusers_training_adapter.py    <span class="c"># ★ 训练侧：如何构造 diffusers 模型、前向、算 loss</span>
+├── vllm_omni_rollout_adapter.py     <span class="c"># ★ 推理侧：如何调 vLLM-Omni 生成、取 latent / logP</span>
+└── agent_loop.py                    <span class="c"># 可选：多步 / agent 化 rollout（ltx2、minimax_h3 有）</span></div>
+      <p class="muted" style="font-size:13.5px">全模态模型换一套名字：<code>omni_rollout_adapter.py</code> + <code>thinker_training_adapter.py</code>（Qwen3-Omni 的 thinker）/ <code>talker_training_adapter.py</code>（Qwen3-TTS 的 talker）。</p>
+
+      <h4>17 个已接入的模型 / 算法目录</h4>
+      <table>
+        <thead><tr><th style="width:32%">目录</th><th>模型 / 用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>qwen_image_flow_grpo</code></td><td>Qwen-Image 的 FlowGRPO（最完整的参考实现）</td></tr>
+          <tr><td><code>qwen_image_edit_flow_grpo</code></td><td>Qwen-Image-Edit（图生图 / 指令编辑）</td></tr>
+          <tr><td><code>qwen_image_diffusion_nft</code> / <code>qwen_image_dpo</code> / <code>qwen_image_dual_grpo</code> / <code>qwen_image_mix_grpo</code></td><td>同一底座的四种算法变体</td></tr>
+          <tr><td><code>flux_dance_grpo</code></td><td>FLUX.1-dev + <b>DanceGRPO</b></td></tr>
+          <tr><td><code>wan22_dance_grpo</code></td><td>Wan2.2 视频生成 + DanceGRPO</td></tr>
+          <tr><td><code>sd3_flow_grpo</code> / <code>sd3_dpo</code></td><td>Stable Diffusion 3.5</td></tr>
+          <tr><td><code>bagel_flow_grpo</code></td><td>BAGEL-7B-MoT（统一理解+生成，含 SFT 模型定义）</td></tr>
+          <tr><td><code>ltx2_flow_grpo</code></td><td>LTX-2.3 文生视频+音频（带 agent_loop）</td></tr>
+          <tr><td><code>minimax_h3_flow_grpo</code> / <code>minimax_h3_diffusion_nft</code></td><td>MiniMax-H3（T2VA / FL2VA / Ref2VA，含 <code>weight_sync.py</code>）</td></tr>
+          <tr><td><code>boogu_image_flow_grpo</code></td><td>Boogu 图像模型</td></tr>
+          <tr><td><code>qwen3_omni</code> / <code>qwen3_tts</code></td><td>全模态与语音合成（thinker / talker 分离）</td></tr>
+          <tr><td><code>schedulers/flow_match_sde.py</code></td><td>流匹配的 SDE 采样调度（DanceGRPO 的 SDE 变体依赖它）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>4) <code>reward_loop/</code> + <code>utils/reward_score/</code> —— 奖励层</h3>
+      <p style="font-size:14.5px">奖励被拆成「<b>怎么调度</b>」与「<b>怎么打分</b>」两块：</p>
+      <ul style="padding-left:20px;font-size:14.5px;margin-top:8px">
+        <li><code>reward_loop/reward_loop.py</code> —— 奖励循环主逻辑；<code>local_accelerator_reward_loop.py</code> —— 用本机加速器（与训练同机）算奖励。</li>
+        <li><code>reward_loop/reward_manager/</code> —— 按模态分文件：<code>visual.py</code>、<code>audio.py</code>、<code>multi.py</code>（多奖励加权）。</li>
+        <li><code>utils/reward_score/</code> —— <b>15 个奖励实现</b>，覆盖偏好模型与任务奖励：</li>
+      </ul>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0">
+        <span class="chip">hpsv2_reward</span>
+        <span class="chip">hpsv3_reward</span>
+        <span class="chip">pickscore_reward</span>
+        <span class="chip">unified_reward</span>
+        <span class="chip">genrm_ocr</span>
+        <span class="chip">mmk12_reward</span>
+        <span class="chip">choice_reward</span>
+        <span class="chip">clap</span>
+        <span class="chip">imagebind</span>
+        <span class="chip">jpeg_compressibility</span>
+        <span class="chip g">http_scorer_client</span>
+        <span class="chip g">latent_http_scorer_client</span>
+        <span class="chip g">audio_http_scorer_client</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">注意三个 <code>http_scorer_client</code>：奖励可以不在训练进程里算，而是通过 HTTP 打到独立的 scorer 服务——这正是「异步奖励 + latent 直接打分（省掉 VAE 解码）」的实现路径。</p>
+    </div>
+
+    <div class="card">
+      <h3>5) <code>agent_loop/</code> —— 多步 / agent 化 rollout</h3>
+      <p style="font-size:14.5px">把一次生成包装成可多轮的循环：<code>diffusion_agent_loop.py</code>（基础）、<code>diffusion_agent_loop_tq.py</code>（TransferQueue 版）、<code>composite_agent_loop.py</code>（组合多个 loop）、<code>single_turn_agent_loop.py</code>（单轮兜底）。模型侧可以在自己的 pipeline 里放 <code>agent_loop.py</code> 覆写默认行为。</p>
+    </div>
+
+    <div class="card">
+      <h3>6) <code>utils/</code> —— 工具层</h3>
+      <table>
+        <thead><tr><th style="width:32%">模块</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td><code>config.py</code></td><td>配置解析与校验（配合 Hydra）</td></tr>
+          <tr><td><code>vllm_omni/</code></td><td>与 vLLM-Omni 的桥接工具</td></tr>
+          <tr><td><code>dataset/</code></td><td><code>rl_dataset.py</code>、<code>omni_rl_datasets.py</code>、<code>offline_dpo_dataset.py</code>、<code>qwen3_omni_transform.py</code>、<code>visual_reflection/</code></td></tr>
+          <tr><td><code>fsdp_utils.py</code> / <code>fs.py</code></td><td>FSDP 与文件系统工具</td></tr>
+          <tr><td><code>metrics_utils.py</code> / <code>tracking.py</code> / <code>mfu/</code></td><td>指标、wandb/tensorboard 上报、MFU（算力利用率）统计</td></tr>
+          <tr><td><code>diffusion_attention.py</code> / <code>net_utils.py</code></td><td>注意力后端与网络工具</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 扩展点 -->
+  <section id="extend">
+    <div class="sec-head"><div class="sec-num">⑤</div><h2>两套扩展机制</h2></div>
+    <p class="sec-sub">这个项目之所以能撑起「17 模型 × 11 trainer」的组合，靠的是注册表 + 适配器两个模式。</p>
+
+    <div class="card">
+      <h3>A. 算法侧：装饰器注册表</h3>
+      <p style="font-size:14.5px"><code>trainer/diffusion/diffusion_algos.py</code> 提供两个注册入口，新算法不用改任何 if-else：</p>
+      <div class="snippet"><span class="k">@register_diffusion_loss</span>(<span class="s">"flow_grpo"</span>)          <span class="c"># 注册一个 loss</span>
+<span class="k">class</span> FlowGRPOLoss(DiffusionLossFn): ...
+
+<span class="k">@register_diffusion_adv_est</span>(<span class="s">"grpo"</span>)              <span class="c"># 注册一个优势估计器</span>
+<span class="k">def</span> compute_flow_grpo_outcome_advantage(...): ...
+
+<span class="c"># 运行时按名字取用</span>
+get_diffusion_loss_fn(name) / get_diffusion_adv_estimator_fn(name)</div>
+
+      <h4>仓库里已内置的 loss 实现</h4>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <span class="chip">FlowGRPOLoss</span>
+        <span class="chip">FlowDPPOLoss</span>
+        <span class="chip">GRPOGuardLoss</span>
+        <span class="chip">DPOLoss</span>
+        <span class="chip">DiffusionNFTLoss</span>
+        <span class="chip">KLLoss</span>
+        <span class="chip">DistillKLLoss</span>
+        <span class="chip">DistillFlowMatchingMSELoss</span>
+      </div>
+
+      <h4>优势估计的关键实现细节</h4>
+      <p style="font-size:14.5px"><code>compute_flow_grpo_outcome_advantage()</code> 就是 GRPO 的组相对优势，被搬到了扩散场景：<b>按 prompt 的 index 分组</b>，组内对 outcome 奖励做归一化。它暴露了两个容易忽略的开关：</p>
+      <div class="snippet">norm_adv_by_std_in_grpo=True   <span class="c"># True：除以组内 std（原始 GRPO）</span>
+                               <span class="c"># False：不除 std（Dr.GRPO 的做法）</span>
+global_std=True                <span class="c"># 用全局 std 还是组内 std 做归一化</span></div>
+      <p class="muted" style="font-size:13.5px">也就是说，「GRPO / Dr.GRPO / 各种 std 变体」在这里只是配置开关，不用改代码。</p>
+    </div>
+
+    <div class="card">
+      <h3>B. 模型侧：适配器三件套</h3>
+      <p style="font-size:14.5px">接入一个新模型 = 在新目录下实现<b>训练适配器</b>与 <b>rollout 适配器</b>两个类，分别对应「用什么算 loss」和「怎么生成」。数据在两侧之间用统一抽象传递：</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+        <span class="chip v">MediaInput</span>
+        <span class="chip v">PromptBundle</span>
+        <span class="chip v">OmniRolloutRequest</span>
+        <span class="chip v">MediaSpec</span>
+        <span class="chip v">DiffusionIOSpec</span>
+        <span class="chip v">DiffusionRolloutOutput</span>
+        <span class="chip v">RequestBatch</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">这套抽象的意义在于：<b>同一个 trainer 可以驱动扩散、自回归、全模态三类完全不同的生成过程</b>，因为差异被关在了适配器内部。</p>
+    </div>
+
+    <div class="card">
+      <h3>速查：想改 X，看哪里</h3>
+      <table>
+        <thead><tr><th style="width:34%">目标</th><th>落点</th></tr></thead>
+        <tbody>
+          <tr><td>加一个新算法（loss）</td><td><code>trainer/diffusion/diffusion_algos.py</code> → <code>@register_diffusion_loss</code></td></tr>
+          <tr><td>换优势估计方式</td><td>同上 → <code>@register_diffusion_adv_est</code>（或直接调 std 开关）</td></tr>
+          <tr><td>接入一个新模型</td><td>新建 <code>pipelines/&lt;model&gt;/</code>：<code>common.py</code> + <code>*_training_adapter.py</code> + <code>*_rollout_adapter.py</code></td></tr>
+          <tr><td>换训练后端</td><td><code>workers/engine/{fsdp,veomni}/</code> + <code>config/diffusion/engine/*.yaml</code></td></tr>
+          <tr><td>改生成 / 采样行为</td><td><code>workers/rollout/vllm_rollout/vllm_omni_*_strategy.py</code>、<code>pipelines/schedulers/flow_match_sde.py</code></td></tr>
+          <tr><td>加一个奖励</td><td><code>utils/reward_score/</code> 新增实现 + <code>reward_loop/reward_manager/{visual,audio,multi}.py</code> 挂上去</td></tr>
+          <tr><td>多轮 / agent 化生成</td><td><code>agent_loop/</code>，或模型目录下的 <code>agent_loop.py</code></td></tr>
+          <tr><td>调超参与并行度</td><td><code>verl_omni/trainer/config/**/*.yaml</code>；改了结构后跑 <code>scripts/generate_trainer_config.sh</code> 重生成</td></tr>
+          <tr><td>跑 Ascend NPU</td><td><code>examples/**/*_npu.sh</code>（14 个）+ <code>docker/Dockerfile.a2.npu</code> / <code>a3.npu</code> + <code>workers/rollout/vllm_rollout/npu_utils.py</code></td></tr>
+          <tr><td>排查环境问题</td><td><code>scripts/diagnose.py</code>、<code>scripts/print_cfg.py</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 工程化 -->
+  <section id="ops">
+    <div class="sec-head"><div class="sec-num">⑥</div><h2>工程化与技术栈</h2></div>
+    <p class="sec-sub">测试密度、容器、依赖约束，以及几个值得注意的工程细节。</p>
+
+    <div class="card">
+      <h3>测试体系（184 个文件 / 39,310 行，比主包还密的测试）</h3>
+      <table>
+        <thead><tr><th style="width:26%">目录</th><th>文件数</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>special_e2e</code></td><td>40</td><td>端到端专项（按模型 / 算法分）</td></tr>
+          <tr><td><code>utils</code></td><td>39</td><td>工具函数单测</td></tr>
+          <tr><td><code>pipelines</code></td><td>32</td><td>模型适配层测试（与 pipelines 一一对应）</td></tr>
+          <tr><td><code>workers</code></td><td>28</td><td>引擎与 rollout worker</td></tr>
+          <tr><td><code>trainer</code></td><td>24</td><td>编排逻辑</td></tr>
+          <tr><td><code>special_sanity</code></td><td>15</td><td>健全性检查</td></tr>
+          <tr><td><code>nightly</code> / <code>agent_loop</code> / <code>gpu_smoke</code> / <code>reward_loop</code></td><td>8 / 8 / 6 / 6</td><td>夜跑、agent loop、GPU 冒烟、奖励循环</td></tr>
+          <tr><td><b><code>npu_smoke</code></b></td><td>1</td><td>NPU 冒烟测试入口</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>依赖与技术栈（摘自 pyproject.toml）</h3>
+      <table>
+        <thead><tr><th style="width:26%">类别</th><th>关键依赖</th></tr></thead>
+        <tbody>
+          <tr><td>编排 / 调度</td><td><code>hydra-core</code>（配置）、<code>ray[default]</code>（分布式 actor 编排）、<code>TransferQueue==0.1.8</code>（rollout→训练的队列）</td></tr>
+          <tr><td>模型 / 生成</td><td><code>diffusers&gt;=0.40.0</code>、<code>transformers&gt;=5.13.0,&lt;=5.14.1</code>（<b>有上限</b>，注释说明是等 Qwen3-Omni adapter 适配 FSDP 的 <code>_no_split_modules</code> 变更）</td></tr>
+          <tr><td>训练</td><td><code>accelerate&gt;=1.14.0</code>、<code>peft</code>（LoRA）、<code>tensordict</code>（<b>版本区间带排除项</b>：<code>&lt;=0.10.0,!=0.9.0</code>）</td></tr>
+          <tr><td>数据</td><td><code>datasets</code>、<code>pyarrow&gt;=19,&lt;25</code>（注释：25.0.0 会触发 ArrowInvalid）、<code>torchdata</code></td></tr>
+          <tr><td>可选 rollout 后端</td><td><code>vllm-omni==0.28.0rc1</code>（<b>分两步安装</b>：先引擎栈，再 rollout + 训练）</td></tr>
+          <tr><td>奖励 / 其它</td><td><code>fastapi</code> + <code>uvicorn</code>（scorer 服务）、<code>wandb</code>、<code>tensorboard</code>、<code>math_verify</code>、<code>imageio[ffmpeg]</code></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:10px">要求 <b>Python ≥ 3.11</b>，项目版本 <b>0.2.0rc1</b>，Apache-2.0。</p>
+    </div>
+
+    <div class="callout">
+      <div class="t">读完代码后的三个判断</div>
+      <p>
+        <b>1. 分层非常干净</b>：编排（trainer）/ 执行（workers）/ 适配（pipelines）/ 奖励（reward_loop）四层几乎没有反向依赖，所以换后端、加模型、加算法都是「填空」而不是「改框架」。<br>
+        <b>2. 扩张策略是「一份模型一份配方」</b>：68 个 example 脚本 + 17 个 pipeline 目录，宁可重复也不抽象成难以调试的通用层——这是工程上务实的选择。<br>
+        <b>3. NPU 是一等公民</b>：A2/A3 专用 Dockerfile、14 个 <code>_npu.sh</code> 配方、npu_utils、npu_smoke 测试，说明昇腾支持是持续维护的路径而非一次性适配。
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>数据来源与方法</h3>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li>仓库：<a href="https://github.com/verl-project/verl-omni">verl-project/verl-omni</a>，浅克隆 <code>main</code> 分支，HEAD = <code>6dc0fc0</code>（<i>[recipe, doc] feat: add MiniMax H3 FlowGRPO V1 sync recipes (#501)</i>）</li>
+        <li>统计口径：文件数与行数用 <code>find</code> + <code>wc -l</code> 实测（排除 <code>.git</code>）；目录职责来自逐文件通读与类/函数签名提取</li>
+        <li>快照时间：<b>2026-09-10</b>。行数与目录结构会随版本演进变化</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <b>VeRL-Omni 项目结构解剖</b> · 基于 commit <code>6dc0fc0</code>（v0.2.0rc1）· 快照 2026-09-10<br>
+    仓库：<a href="https://github.com/verl-project/verl-omni">github.com/verl-project/verl-omni</a> ·
+    文档：<a href="https://verl-omni.readthedocs.io/en/latest/index.html">verl-omni.readthedocs.io</a> ·
+    姊妹篇：<a href="verl-veomni-stack.html">verl / VeRL-Omni / VeOmni 三层关系</a>
+  </div>
+</footer>
+
+<script>
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  const links = document.querySelectorAll('nav a[data-spy]');
+  const map = {};
+  links.forEach(a => map[a.getAttribute('href').slice(1)] = a);
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(a => a.classList.remove('active'));
+        (map[e.target.id] || {classList:{add(){}}}).classList.add('active');
+      }
+    });
+  }, {rootMargin:'-30% 0px -60% 0px'});
+  document.querySelectorAll('main section[id]').forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>verl · VeRL-Omni · VeOmni —— 三层同栈</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink-soft:#475569; --muted:#64748b;
+    --bg:#f6f8fb; --card:#ffffff; --line:#e2e8f0;
+    --accent:#6366f1; --accent2:#06b6d4;
+    --grad:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#06b6d4 100%);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.75;
+  }
+  .progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--grad);z-index:100;transition:width .1s linear}
+
+  nav{position:sticky;top:0;z-index:90;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-inner{max-width:1040px;margin:0 auto;display:flex;align-items:center;gap:4px;padding:10px 20px;flex-wrap:wrap}
+  .nav-brand{font-weight:800;margin-right:12px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:15px}
+  nav a{text-decoration:none;color:var(--ink-soft);font-size:13.5px;font-weight:600;padding:6px 12px;border-radius:999px;transition:.2s}
+  nav a:hover{background:#eef2ff;color:var(--accent)}
+  nav a.active{background:#eef2ff;color:var(--accent)}
+
+  header{
+    background:radial-gradient(1200px 500px at 15% -10%,rgba(99,102,241,.45),transparent 60%),
+               radial-gradient(900px 420px at 90% 10%,rgba(6,182,212,.32),transparent 60%),
+               #0b1120;
+    color:#f1f5f9;padding:70px 20px 62px;
+  }
+  .hero{max-width:1040px;margin:0 auto}
+  .hero .kicker{letter-spacing:.24em;font-size:12px;font-weight:700;color:#a5b4fc;text-transform:uppercase}
+  .hero h1{font-size:clamp(28px,4.6vw,44px);font-weight:900;margin:14px 0 8px;line-height:1.25}
+  .hero h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{color:#cbd5e1;font-size:16px;max-width:820px;margin-top:10px}
+  .hero .tags{margin-top:24px;display:flex;gap:10px;flex-wrap:wrap}
+  .hero .tag{font-size:13px;padding:6px 14px;border:1px solid rgba(148,163,184,.4);border-radius:999px;color:#e2e8f0;background:rgba(148,163,184,.08)}
+
+  main{max-width:1040px;margin:0 auto;padding:0 20px 90px}
+  section{padding-top:56px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{flex:none;width:42px;height:42px;border-radius:12px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;box-shadow:0 8px 20px rgba(99,102,241,.35)}
+  h2{font-size:27px;font-weight:800}
+  .sec-sub{color:var(--muted);font-size:15px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px;margin-bottom:22px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .callout{border-radius:var(--radius);padding:20px 24px;margin-bottom:22px;color:#fff;background:linear-gradient(135deg,#312e81,#4338ca 60%,#0e7490);box-shadow:0 12px 30px rgba(49,46,129,.35)}
+  .callout .t{font-weight:800;font-size:14px;letter-spacing:.1em;opacity:.85;margin-bottom:4px}
+  .callout p{font-size:16.5px;line-height:1.8}
+  h3{font-size:19px;font-weight:800;margin:0 0 12px}
+  h4{font-size:15px;font-weight:800;margin:18px 0 8px;color:#312e81}
+  .muted{color:var(--muted)}
+  .em{color:var(--accent);font-weight:700}
+
+  /* 速览卡 */
+  .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:820px){.trio{grid-template-columns:1fr}}
+  .fcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;border-top:4px solid var(--accent);position:relative}
+  .fcard.omni{border-top-color:#8b5cf6}
+  .fcard.train{border-top-color:#06b6d4}
+  .fcard h5{font-size:17px;font-weight:800;margin-bottom:4px}
+  .fcard .role{font-size:12.5px;font-weight:700;letter-spacing:.06em;color:var(--accent);text-transform:uppercase;margin-bottom:10px}
+  .fcard.omni .role{color:#7c3aed}
+  .fcard.train .role{color:#0891b2}
+  .fcard p{font-size:14px;color:var(--ink-soft)}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+  .stat{font-size:12.5px;color:var(--muted)}
+  .stat b{display:block;font-size:16px;color:var(--ink)}
+
+  /* 分层架构 */
+  .layers{display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
+  .layer{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  @media(max-width:760px){.layer{grid-template-columns:1fr}}
+  .layer .lname{font-size:13px;font-weight:800;color:#4338ca}
+  .layer .lbody{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:13px;padding:6px 12px;border-radius:9px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-weight:600}
+  .chip.v{background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9}
+  .chip.c{background:#ecfeff;border-color:#a5f3fc;color:#0e7490}
+  .chip.g{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .chip.grey{background:#f1f5f9;border-color:#e2e8f0;color:#475569}
+  .arrownote{grid-column:2;font-size:12px;color:var(--muted)}
+
+  /* 依赖链 */
+  .chain{background:#0b1120;color:#e2e8f0;border-radius:14px;padding:22px 26px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;line-height:2;overflow-x:auto}
+  .chain .k{color:#7dd3fc}
+  .chain .c{color:#94a3b8}
+  .chain .hl{color:#fca5a5}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0}
+  th,td{padding:11px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f1f5f9;font-size:12.5px;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase}
+  tr:last-child td{border-bottom:none}
+  td code{background:#f1f5f9;padding:2px 6px;border-radius:5px;font-size:12.5px}
+
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:14px 0 4px}
+  .step{flex:1 1 160px;min-width:160px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px}
+  .step b{display:block;font-size:13px;margin-bottom:3px}
+  .step span{color:var(--muted);display:block;line-height:1.5}
+  .step.hot{background:linear-gradient(135deg,#eef2ff,#ecfeff);border-color:#a5b4fc}
+  .step.hot b{color:#4338ca}
+  .flow .arrow{align-self:center;color:#94a3b8;font-size:18px;font-weight:700;flex:none}
+
+  /* 时间线 */
+  .timeline{position:relative;padding-left:26px;margin-top:8px}
+  .timeline:before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,#6366f1,#06b6d4)}
+  .tl{position:relative;padding:0 0 18px 6px}
+  .tl:before{content:'';position:absolute;left:-24px;top:7px;width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid var(--accent)}
+  .tl .when{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.04em}
+  .tl .what{font-size:14.5px}
+  .tl .what b{font-weight:700}
+
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.duo{grid-template-columns:1fr}}
+  .panel{border-radius:14px;padding:20px 22px;font-size:14.5px}
+  .panel h4{margin-top:0}
+  .panel ul{padding-left:20px}
+  .panel li+li{margin-top:7px}
+  .panel.good{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+  .panel.good h4{color:#065f46}
+  .panel.note{background:#eef2ff;border:1px solid #c7d2fe;color:#312e81}
+  .panel.note h4{color:#312e81}
+
+  .quote{border-left:4px solid var(--accent);background:#eef2ff;border-radius:0 14px 14px 0;padding:18px 22px;font-size:15.5px;color:#312e81;font-weight:600;margin:8px 0 20px}
+
+  footer{border-top:1px solid var(--line);background:#fff}
+  .foot{max-width:1040px;margin:0 auto;padding:28px 20px;color:var(--muted);font-size:13px}
+  .foot a{color:var(--accent);text-decoration:none}
+  .foot .ref{margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">verl · VeRL-Omni · VeOmni</span>
+    <a href="#overview" data-spy>速览</a>
+    <a href="#arch" data-spy>分层架构</a>
+    <a href="#verl" data-spy>verl</a>
+    <a href="#verlomni" data-spy>VeRL-Omni</a>
+    <a href="#veomni" data-spy>VeOmni</a>
+    <a href="#relation" data-spy>关系与生态</a>
+  </div>
+</nav>
+
+<header>
+  <div class="hero">
+    <div class="kicker">RL Post-Training Stack · Omni-Modal</div>
+    <h1><span class="g">verl</span> · <span class="g">VeRL-Omni</span> · <span class="g">VeOmni</span></h1>
+    <p class="sub">三个名字，三层分工：<b>verl</b> 是 LLM 的 RL 编排底座；<b>VeRL-Omni</b> 是它在扩散与全模态生成模型上的专项扩展（建立在 verl + vLLM-Omni 之上）；<b>VeOmni</b> 是任意模态的训练框架，同时充当 VeRL-Omni 的可选训练后端。三者拼成「训练 → RL 对齐 → 推理部署」的一条完整链路。</p>
+    <div class="tags">
+      <span class="tag">HybridFlow / 混合控制器</span>
+      <span class="tag">FlowGRPO · DanceGRPO</span>
+      <span class="tag">Model-Centric Recipe Zoo</span>
+      <span class="tag">FSDP2 · USP · EP</span>
+      <span class="tag">NVIDIA / ROCm / Ascend NPU</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ 速览 ============ -->
+  <section id="overview">
+    <div class="sec-head"><div class="sec-num">①</div><h2>三张卡片看懂分工</h2></div>
+    <p class="sec-sub">数据截至 2026-09-10，来自各仓库 README 与官方文档。</p>
+
+    <div class="trio">
+      <div class="fcard">
+        <h5>verl</h5>
+        <div class="role">RL 编排底座</div>
+        <p>LLM 的灵活、高效、生产可用的 RL 训练库，是论文 <i>HybridFlow</i> 的开源实现。用「单控制器 + 多控制器」的混合编程模型表达复杂后训练数据流，几行代码就能搭出 GRPO / PPO。</p>
+        <div class="stats">
+          <div class="stat"><b>23.4k★</b>stars</div>
+          <div class="stat"><b>2024.10</b>建库</div>
+          <div class="stat"><b>Apache-2.0</b>许可</div>
+        </div>
+      </div>
+
+      <div class="fcard omni">
+        <h5>VeRL-Omni</h5>
+        <div class="role">扩散 / 全模态 RL</div>
+        <p>面向<b>多模态生成模型</b>的 RL 后训练框架，<b>built on top of verl 与 vLLM-Omni</b>。它脱胎于 verl 内部的多模态生成 RL 工作，后来独立成专门仓库以便更快演进。</p>
+        <div class="stats">
+          <div class="stat"><b>≈990★</b>stars</div>
+          <div class="stat"><b>2026.04</b>建库</div>
+          <div class="stat"><b>Apache-2.0</b>许可</div>
+        </div>
+      </div>
+
+      <div class="fcard train">
+        <h5>VeOmni</h5>
+        <div class="role">任意模态训练</div>
+        <p>字节 Seed 开源的<b>任意模态</b>训练框架（论文 <i>OmniScale</i>，AAAI 2026 接收）。核心是「model-centric 分布式 recipe 动物园」：把并行逻辑从模型计算里解耦，像搭积木一样组合训练配方。</p>
+        <div class="stats">
+          <div class="stat"><b>2.2k★</b>stars</div>
+          <div class="stat"><b>2025.04</b>开源</div>
+          <div class="stat"><b>Apache-2.0</b>许可</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:22px">
+      <div class="t">一句话串联</div>
+      <p><b>VeOmni</b> 负责「把全模态模型训起来」，<b>verl</b> 负责「RL 怎么编排」，<b>VeRL-Omni</b> 把两者与 <b>vLLM-Omni</b> 组装成「扩散 / 全模态生成模型的 RL 后训练」——训练后端三选一，rollout 一律走 vLLM-Omni。</p>
+    </div>
+  </section>
+
+  <!-- ============ 分层架构 ============ -->
+  <section id="arch">
+    <div class="sec-head"><div class="sec-num">②</div><h2>分层架构：谁在哪一层</h2></div>
+    <p class="sec-sub">理解三者关系的关键是分清「编排 / 训练 / rollout」三种角色。</p>
+
+    <div class="card">
+      <div class="layers">
+        <div class="layer">
+          <div class="lname">应用 / 奖励层</div>
+          <div class="lbody">
+            <span class="chip grey">规则奖励</span>
+            <span class="chip grey">模型奖励（VLM judge / OCR scorer）</span>
+            <span class="chip grey">HTTP Scorer 服务</span>
+            <span class="chip grey">异步奖励计算</span>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="lname">RL 编排层</div>
+          <div class="lbody">
+            <span class="chip">verl（HybridFlow 混合控制器）</span>
+            <span class="chip v">VeRL-Omni（扩散 / 全模态专项）</span>
+          </div>
+          <div class="arrownote">verl 是底座；VeRL-Omni 建立在它之上，专门处理「去噪轨迹 rollout + 多模态奖励」这类非文本负载。</div>
+        </div>
+        <div class="layer">
+          <div class="lname">训练引擎层</div>
+          <div class="lbody">
+            <span class="chip c">FSDP2</span>
+            <span class="chip c">Megatron-LM</span>
+            <span class="chip c">DiffusersFSDP</span>
+            <span class="chip c">VeOmni</span>
+          </div>
+          <div class="arrownote">VeRL-Omni 的可选训练后端就是这三类；VeOmni 本身也对外提供 RL trainer 后端。</div>
+        </div>
+        <div class="layer">
+          <div class="lname">rollout / 推理层</div>
+          <div class="lbody">
+            <span class="chip g">vLLM</span>
+            <span class="chip g">SGLang</span>
+            <span class="chip g">vLLM-Omni（多模态生成异步高吞吐服务）</span>
+          </div>
+          <div class="arrownote">文本 RL 用 vLLM / SGLang；扩散与全模态生成走 vLLM-Omni。</div>
+        </div>
+        <div class="layer">
+          <div class="lname">模型层</div>
+          <div class="lbody">
+            <span class="chip grey">LLM / VLM</span>
+            <span class="chip grey">Qwen-Image · Wan2.2 · FLUX.1-dev · SD3.5</span>
+            <span class="chip grey">BAGEL · HunyuanImage-3.0</span>
+            <span class="chip grey">Qwen3-Omni</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>代码级的依赖方向</h3>
+      <div class="chain">
+<span class="c"># VeRL-Omni 的自我描述</span>
+<span class="k">VeRL-Omni</span> = <span class="hl">verl</span>（编排底座） + <span class="hl">vLLM-Omni</span>（rollout 后端） + 可插拔训练后端
+                              │
+                              ├── trainer: <span class="k">DiffusersFSDP</span>
+                              ├── trainer: <span class="k">Megatron</span>
+                              └── trainer: <span class="k">VeOmni</span>  ← 64×H100 的官方配方
+      </div>
+      <p class="muted" style="font-size:13px;margin-top:10px">VeOmni 侧同样对得上：其 README 明确写有 “a rl trainer as a trainer backend in reinforcement learning”，路线图里则列着 “RL post training for omni-modality models with VeRL”。两边是同一套对接关系。</p>
+    </div>
+
+    <div class="card">
+      <h3>时间线</h3>
+      <div class="timeline">
+        <div class="tl"><div class="when">2024.10</div><div class="what"><b>verl 建库</b> —— HybridFlow 论文开源实现（arXiv 2409.19256）</div></div>
+        <div class="tl"><div class="when">2025.04</div><div class="what"><b>VeOmni 开源</b> —— 任意模态训练框架首次发布</div></div>
+        <div class="tl"><div class="when">2025.08</div><div class="what"><b>VeOmni 技术报告</b>发布（arXiv 2508.02317）</div></div>
+        <div class="tl"><div class="when">2025.11</div><div class="what">论文被 <b>AAAI 2026 接收</b>（收录名 <i>OmniScale</i>）</div></div>
+        <div class="tl"><div class="when">2026.04</div><div class="what"><b>VeRL-Omni 建库</b> —— 从 verl 的多模态生成 RL 工作中独立出来</div></div>
+        <div class="tl"><div class="when">2026.05</div><div class="what"><b>VeRL-Omni 预发布</b>，vLLM 官方博客配套介绍</div></div>
+        <div class="tl"><div class="when">2026.08</div><div class="what"><b>VeRL-Omni v0.2.0</b> —— 更快的扩散 RL、Qwen3-Omni 的 DPO/GSPO、LTX-2.3、Qwen-Image-Edit 支持</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ verl ============ -->
+  <section id="verl">
+    <div class="sec-head"><div class="sec-num">③</div><h2>verl：RL 编排底座</h2></div>
+    <p class="sec-sub">Volcano Engine Reinforcement Learning for LLMs · 字节 Seed 发起，verl 社区维护 · Apache-2.0</p>
+
+    <div class="callout">
+      <div class="t">一句话</div>
+      <p>verl 把 RL 后训练拆成「数据流编排」与「并行执行」两层：用单控制器写数据流，用多控制器（SPMD）跑并行，从而几行代码就能组装 GRPO / PPO，并自由更换训练与推理引擎。</p>
+    </div>
+
+    <div class="card">
+      <h3>三个设计支柱</h3>
+      <div class="flow">
+        <div class="step hot"><b>混合控制器编程模型</b><span>单控制器描述 RL 数据流，多控制器执行并行计算；复杂后训练流程可灵活表达</span></div>
+        <div class="arrow">+</div>
+        <div class="step"><b>模块化 API</b><span>计算与数据依赖解耦，无缝接入 FSDP、Megatron-LM、vLLM、SGLang</span></div>
+        <div class="arrow">+</div>
+        <div class="step"><b>3D-HybridEngine</b><span>actor 重分片，消除显存冗余，大幅降低「训练 ↔ 生成」切换的通信开销</span></div>
+      </div>
+      <h4>其他要点</h4>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li><b>灵活的设备映射</b>：不同模型可放到不同 GPU 组，适配不同规模集群。</li>
+        <li><b>HuggingFace 模型开箱可用</b>，降低接入成本。</li>
+        <li><b>设备无关性</b>：NVIDIA / AMD ROCm / Ascend NPU 均有支持路径。</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>围绕 verl 长出的生态</h3>
+      <p class="muted" style="font-size:14px;margin-bottom:12px">verl 已经不只是「一个 RL 库」，而是 <code>verl-project</code> 组织下的一片子项目森林：</p>
+      <table>
+        <thead><tr><th style="width:26%">子项目</th><th>定位</th></tr></thead>
+        <tbody>
+          <tr><td><b>VeRL-Omni</b></td><td>扩散与全模态生成模型的 RL 后训练（本页主角之一）</td></tr>
+          <tr><td><b>verl-vla</b></td><td>统一的 VLA 后训练框架：人机在环数据采集、SFT 与 RL，覆盖仿真器 / 真机 / 云边分布式资源</td></tr>
+          <tr><td><b>uni-agent</b></td><td>规模化构建、运行与训练 LLM Agent 的统一框架</td></tr>
+          <tr><td><b>vexact</b></td><td>零偏差 HuggingFace rollout：batch-invariant kernel、与 FSDP 共享模型定义，示例兼容 VeOmni</td></tr>
+          <tr><td><b>verl-SpeCo</b></td><td>RL 训练与推理的投机解码协同训练，让 draft 模型在训练中持续对齐、可直接复用于加速服务</td></tr>
+          <tr><td><b>RL-Insight</b></td><td>RL 训练在线可观测性：训练侧指标、RL 状态 trace 与服务看板打通</td></tr>
+          <tr><td><b>VeRL-Tinker</b></td><td>沿用 Tinker Cookbook 的使用习惯，在你自己掌控的 GPU worker 上跑 SFT / RL / 蒸馏</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ VeRL-Omni ============ -->
+  <section id="verlomni">
+    <div class="sec-head"><div class="sec-num">④</div><h2>VeRL-Omni：扩散与全模态的 RL</h2></div>
+    <p class="sec-sub">Easy, fast, and stable RL training for diffusion and omni-modality models · built on top of verl + vLLM-Omni</p>
+
+    <div class="callout">
+      <div class="t">为什么需要它单独成库</div>
+      <p>多模态生成 RL 与纯文本 LLM RL 的差别不只在模型结构：<b>rollout 是连续 latent 空间里的去噪轨迹</b>（不是 token 序列），一次 rollout 可能串起 text encoder → DiT → VAE 多级异构流水线，<b>奖励函数本身常常就是多模态模型</b>，显存峰值也高得多。这些约束值得一个专门的仓库来快速演进。</p>
+    </div>
+
+    <div class="card">
+      <h3>覆盖三类生成模型</h3>
+      <div class="trio">
+        <div class="fcard" style="border-top-color:#6366f1">
+          <div class="role">① Diffusion</div>
+          <p>图像 / 视频 / 音频扩散生成模型<br><b>Qwen-Image、Wan2.2、FLUX.1-dev、SD3.5、LTX-2.3</b></p>
+        </div>
+        <div class="fcard" style="border-top-color:#8b5cf6">
+          <div class="role">② 统一理解 + 生成</div>
+          <p>同一套权重既懂又画<br><b>BAGEL-7B-MoT、HunyuanImage-3.0</b></p>
+        </div>
+        <div class="fcard" style="border-top-color:#06b6d4">
+          <div class="role">③ 全模态</div>
+          <p>联合处理文本 / 图像 / 音频 / 视频<br><b>Qwen3-Omni</b></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>算法清单</h3>
+      <p class="muted" style="font-size:14px;margin-bottom:12px">文档的 Algorithms 目录里已经有：</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="chip">Flow-GRPO</span>
+        <span class="chip">Flow-DPPO</span>
+        <span class="chip">Diffusion-DPO</span>
+        <span class="chip">DiffusionNFT</span>
+        <span class="chip">GRPO-Guard</span>
+        <span class="chip">Mix-GRPO</span>
+        <span class="chip">Diffusion OPD（在线蒸馏）</span>
+        <span class="chip">Omni OPD</span>
+        <span class="chip v">DanceGRPO</span>
+        <span class="chip v">GSPO</span>
+        <span class="chip v">DAPO</span>
+      </div>
+      <p style="font-size:14.5px;margin-top:14px"><b>其中 DanceGRPO 就是本套页面前一篇讲的那个算法</b>——仓库里有 FLUX.1-dev DanceGRPO 与 Wan2.2 视频生成的完整配方，还带 SDE variants 的说明。</p>
+    </div>
+
+    <div class="card">
+      <h3>关键能力</h3>
+      <div class="flow">
+        <div class="step hot"><b>专用 rollout</b><span>vLLM-Omni 提供多模态生成的高吞吐异步服务，精度与 diffusers 持平</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>灵活的奖励流水线</b><span>规则奖励、模型奖励、多模态奖励计算均可组合；支持 HTTP Scorer 与异步奖励，与 rollout 重叠</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>模块化训练后端</b><span>DiffusersFSDP / Megatron / VeOmni，复用现有并行能力（FSDP / USP / TP）</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>稳定性与吞吐</b><span>rollout correction 跳过 logP 重算；参考 Qwen-Image FlowGRPO 配方端到端吞吐比 diffusers 版 flow_grpo 高约 25%</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>实例：Qwen-Image 上能跑哪些配方</h3>
+      <p class="muted" style="font-size:13.5px;margin-bottom:10px">同一个模型（<code>Qwen/Qwen-Image</code>，MM-DiT + flow-matching），文档列出的可选 trainer 与硬件配置：</p>
+      <table>
+        <thead><tr><th style="width:34%">Trainer</th><th>硬件配置</th></tr></thead>
+        <tbody>
+          <tr><td>Flow-GRPO (LoRA)</td><td>4×GPU</td></tr>
+          <tr><td>Flow-GRPO (full)</td><td>4×H200</td></tr>
+          <tr><td>Flow-GRPO (async reward)</td><td>5×GPU（奖励计算与 rollout 重叠）</td></tr>
+          <tr><td>Flow-GRPO (multi-node)</td><td>2×4 GPU</td></tr>
+          <tr><td>Flow-GRPO (SP=2)</td><td>4×GPU（序列并行）</td></tr>
+          <tr><td>Flow-GRPO (rollout-corr)</td><td>4×GPU</td></tr>
+          <tr><td><b>Flow-GRPO (VeOmni)</b></td><td><b>64×H100</b> ← VeOmni 作为训练后端</td></tr>
+          <tr><td><b>Flow-GRPO (NPU)</b></td><td><b>8×NPU</b> ← Ascend NPU 配方</td></tr>
+          <tr><td>Flow-DPPO / GRPO-Guard / Mix-GRPO / Diffusion-DPO / DiffusionNFT</td><td>各 4×GPU</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:14px;margin-top:12px"><b>奖励模型</b>同样是多模态模型，例如 OCR 任务用 <code>Qwen/Qwen3-VL-8B-Instruct</code> 做 VLM judge（TP=4 同机部署），图文编辑用 PickScore。</p>
+    </div>
+
+    <div class="card">
+      <h3>Ascend NPU 支持</h3>
+      <p>VeRL-Omni 提供 <b>NPU 安装文档</b>与 <b>Ascend NPU Docker 镜像</b>，并有 <code>run_qwen_image_ocr_lora_npu.sh</code>（8×NPU）的 FlowGRPO 配方——从安装到跑通训练都有现成脚本。</p>
+    </div>
+  </section>
+
+  <!-- ============ VeOmni ============ -->
+  <section id="veomni">
+    <div class="sec-head"><div class="sec-num">⑤</div><h2>VeOmni：任意模态训练框架</h2></div>
+    <p class="sec-sub">VeOmni: Scaling Any Modality Model Training with Model-Centric Distributed Recipe Zoo · 字节 Seed · 论文 <i>OmniScale</i> 被 AAAI 2026 接收</p>
+
+    <div class="callout">
+      <div class="t">核心理念</div>
+      <p><b>Model-centric，而不是 system-centric</b>：把复杂的分布式并行逻辑从模型计算里<b>解耦</b>成一份份可组合的「recipe」。研究者只需按 HuggingFace 风格写模型，就能像搭积木一样组合出高效的并行训练配方——官方称可把工程时间压缩 90% 以上。</p>
+    </div>
+
+    <div class="card">
+      <h3>设计原则</h3>
+      <div class="duo">
+        <div class="panel note">
+          <h4>灵活与模块化</h4>
+          <ul>
+            <li>组件可解耦、可替换成你自己的实现。</li>
+            <li><b>Trainer-free</b>：提供线性训练脚本，不用 PyTorch-Lightning / HF Trainer 那种刚性结构，训练逻辑完全暴露，透明可控。</li>
+            <li>同时提供一个基础 trainer（文本 / VLM / omni），以及<b>作为 RL 训练后端的 rl trainer</b>。</li>
+          </ul>
+        </div>
+        <div class="panel good">
+          <h4>Omni native + Torch native</h4>
+          <ul>
+            <li>任意 omni 模型都能跨设备、跨加速器扩展。</li>
+            <li>最大程度复用 PyTorch 原生能力，兼容性与性能兼得。</li>
+            <li>支持预训练与后训练（single- 与 multi-modal 均可）。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>关键特性</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="chip c">FSDP2 训练后端</span>
+        <span class="chip c">序列并行（DeepSpeed Ulysses，async / non-async）</span>
+        <span class="chip c">专家并行（MoE，如 Qwen3-MoE）</span>
+        <span class="chip c">MoE 高效 GroupGemm kernel · Liger-Kernel</span>
+        <span class="chip c">动态批处理 + Omnidata 数据处理</span>
+        <span class="chip c">Torch Distributed Checkpoint</span>
+        <span class="chip g">NVIDIA GPU / AMD ROCm / Ascend NPU</span>
+        <span class="chip grey">兼容 HuggingFace Transformers</span>
+        <span class="chip grey">wandb 实验追踪</span>
+      </div>
+
+      <h4>已支持模型（节选）</h4>
+      <table>
+        <thead><tr><th style="width:38%">模型</th><th>规模</th></tr></thead>
+        <tbody>
+          <tr><td>DeepSeek 2.5 / 3 / R1</td><td>236B / 671B</td></tr>
+          <tr><td>DeepSeek-V4</td><td>Checkpoint-dependent（DSA/mHC 默认 eager，可选 SM90+ TileLang 后端）</td></tr>
+          <tr><td>Llama 3–3.3</td><td>1B / 3B / 8B / 70B</td></tr>
+          <tr><td>Qwen2–3（文本）</td><td>0.5B → 72B</td></tr>
+          <tr><td>Qwen3-VL（Dense / MoE）</td><td>2B → 72B；30BA3B / 235BA22B</td></tr>
+          <tr><td>Qwen3-MoE</td><td>30BA3B / 235BA22B</td></tr>
+          <tr><td>GPT-OSS</td><td>120B（含 LoRA + EP4 配方）</td></tr>
+          <tr><td>Qwen2–3 Omni</td><td>7B / 30BA3B</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>它和 RL 的关系（这是三者交汇点）</h3>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li>VeOmni 自我定位是<b>训练框架</b>，但它<b>自带一个 rl trainer，可充当 RL 训练后端</b>。</li>
+        <li>路线图里明确写着 <b>“RL post training for omni-modality models with VeRL”</b>——即与大模态 RL 框架对接。</li>
+        <li>在 VeRL-Omni 侧则体现为训练后端三选一中的一项：<code>run_qwen_image_ocr_veomni.sh</code>（64×H100）。</li>
+        <li>两者共享同一批底层能力（FSDP2、序列并行、专家并行、HF 权重格式），因此可以互换而不必重写模型代码。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ 关系与生态 ============ -->
+  <section id="relation">
+    <div class="sec-head"><div class="sec-num">⑥</div><h2>关系、对比与生态</h2></div>
+    <p class="sec-sub">同一技术栈的三层，加上几个容易混淆的「omni」名字。</p>
+
+    <div class="card">
+      <table>
+        <thead><tr><th style="width:16%">维度</th><th>verl</th><th>VeRL-Omni</th><th>VeOmni</th></tr></thead>
+        <tbody>
+          <tr><td><b>角色</b></td><td>RL 编排底座</td><td>扩散 / 全模态 RL 框架</td><td>任意模态训练框架</td></tr>
+          <tr><td><b>目标模型</b></td><td>LLM / VLM</td><td>扩散、统一理解+生成、全模态生成模型</td><td>任意模态（文本 / 图像 / 视频 / 音频 / omni）</td></tr>
+          <tr><td><b>层位置</b></td><td>RL 编排层</td><td>RL 编排层（覆盖生成模型）</td><td>训练引擎层（兼作 RL 后端）</td></tr>
+          <tr><td><b>与谁耦合</b></td><td>FSDP / Megatron / vLLM / SGLang</td><td><b>建立在 verl 与 vLLM-Omni 之上</b></td><td>FSDP2 / USP / EP，可作 VeRL 的训练后端</td></tr>
+          <tr><td><b>代表算法</b></td><td>PPO、GRPO、DAPO…</td><td>Flow-GRPO、DanceGRPO、DiffusionNFT、Flow-DPPO…</td><td>SFT / 预训练为主，另提供 RL trainer</td></tr>
+          <tr><td><b>硬件</b></td><td>NVIDIA / ROCm / Ascend NPU</td><td>GPU + <b>Ascend NPU 配方与镜像</b></td><td>NVIDIA / AMD ROCm / Ascend NPU</td></tr>
+          <tr><td><b>发起方</b></td><td>字节 Seed 发起，社区维护</td><td>verl-project 社区</td><td>字节 Seed</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>四个容易混淆的名字</h3>
+      <table>
+        <thead><tr><th style="width:22%">名字</th><th>是什么</th><th style="width:22%">属于哪条线</th></tr></thead>
+        <tbody>
+          <tr><td><b>verl</b></td><td>LLM 的 RL 训练库（HybridFlow 开源实现）</td><td>verl-project</td></tr>
+          <tr><td><b>VeRL-Omni</b></td><td>verl 在扩散 / 全模态生成模型上的 RL 扩展</td><td>verl-project</td></tr>
+          <tr><td><b>VeOmni</b></td><td>任意模态<b>训练</b>框架（论文名 OmniScale）</td><td>ByteDance-Seed</td></tr>
+          <tr><td><b>vLLM-Omni</b></td><td>全模态<b>推理 / 服务</b>引擎，VeRL-Omni 的 rollout 后端</td><td>vLLM 社区</td></tr>
+        </tbody>
+      </table>
+      <div class="quote">三个名字不是同一项目的三个版本，而是同一条链路上的三种角色：<b>Verl = 编排</b>，<b>VeOmni = 训练</b>，<b>vLLM-Omni = 推理</b>，<b>VeRL-Omni = 把三者组装成生成模型的 RL 闭环</b>。</div>
+    </div>
+
+    <div class="card">
+      <h3>一条完整的全模态链路</h3>
+      <div class="flow">
+        <div class="step"><b>数据 / 模型准备</b><span>VeOmni 的 OmniData 动态批处理、HF 格式权重</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>预训练 / SFT</b><span>VeOmni（FSDP2 + USP + EP），任意模态</span></div>
+        <div class="arrow">→</div>
+        <div class="step hot"><b>RL 对齐</b><span>VeRL-Omni / verl：Flow-GRPO、DanceGRPO…<br>训练后端可选 VeOmni</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>Rollout</b><span>vLLM-Omni 异步高吞吐多模态生成</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>服务部署</b><span>vLLM / vLLM-Omni（含 Ascend NPU 后端）</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <b>官方来源</b>
+    <div class="ref">· verl —— <a href="https://github.com/verl-project/verl">github.com/verl-project/verl</a> · 论文 HybridFlow <a href="https://arxiv.org/abs/2409.19256">arXiv:2409.19256</a> · <a href="https://verl.readthedocs.io/en/latest/">文档</a></div>
+    <div class="ref">· VeRL-Omni —— <a href="https://github.com/verl-project/verl-omni">github.com/verl-project/verl-omni</a> · <a href="https://verl-omni.readthedocs.io/en/latest/index.html">文档</a> · 发布博客 <a href="https://vllm.ai/blog/2026-05-14-verl-omni">vllm.ai/blog/2026-05-14-verl-omni</a></div>
+    <div class="ref">· VeOmni —— <a href="https://github.com/ByteDance-Seed/VeOmni">github.com/ByteDance-Seed/VeOmni</a> · 论文 OmniScale <a href="https://arxiv.org/abs/2508.02317">arXiv:2508.02317</a> · <a href="https://seed.bytedance.com/en/blog/bytedance-seed-open-sources-veomni-unlocking-any-modality-model-training">Seed 官方博客</a></div>
+    <div class="ref">· vLLM-Omni —— <a href="https://github.com/vllm-project/vllm-omni">github.com/vllm-project/vllm-omni</a></div>
+    <div class="ref" style="margin-top:10px">※ 数据（star 数、版本、模型清单）截至 2026-09-10，取自各仓库 README 与官方文档；star 数会随时变化，请以仓库实时数据为准。</div>
+  </div>
+</footer>
+
+<script>
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  const links = document.querySelectorAll('nav a[data-spy]');
+  const map = {};
+  links.forEach(a => map[a.getAttribute('href').slice(1)] = a);
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(a => a.classList.remove('active'));
+        (map[e.target.id] || {classList:{add(){}}}).classList.add('active');
+      }
+    });
+  }, {rootMargin:'-30% 0px -60% 0px'});
+  document.querySelectorAll('main section[id]').forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>

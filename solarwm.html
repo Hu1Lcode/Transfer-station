@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SolarWM 解读 · 全开放的长时程视频世界模型</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink-soft:#475569; --muted:#64748b;
+    --bg:#f6f8fb; --card:#ffffff; --line:#e2e8f0;
+    --accent:#6366f1;
+    --grad:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#06b6d4 100%);
+    --sun:linear-gradient(135deg,#f59e0b 0%,#ef4444 50%,#8b5cf6 100%);
+    --radius:16px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.75}
+  .progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--sun);z-index:100;transition:width .1s linear}
+
+  nav{position:sticky;top:0;z-index:90;background:rgba(255,255,255,.84);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-inner{max-width:1060px;margin:0 auto;display:flex;align-items:center;gap:4px;padding:10px 20px;flex-wrap:wrap}
+  .nav-brand{font-weight:800;margin-right:12px;background:var(--sun);-webkit-background-clip:text;background-clip:text;color:transparent;font-size:15px}
+  nav a{text-decoration:none;color:var(--ink-soft);font-size:13.5px;font-weight:600;padding:6px 11px;border-radius:999px;transition:.2s}
+  nav a:hover{background:#eef2ff;color:var(--accent)}
+  nav a.active{background:#eef2ff;color:var(--accent)}
+
+  header{background:radial-gradient(1100px 480px at 12% -10%,rgba(245,158,11,.30),transparent 60%),radial-gradient(900px 420px at 88% 6%,rgba(139,92,246,.38),transparent 62%),#0b1120;color:#f1f5f9;padding:68px 20px 58px}
+  .hero{max-width:1060px;margin:0 auto}
+  .hero .kicker{letter-spacing:.24em;font-size:12px;font-weight:700;color:#fcd34d;text-transform:uppercase}
+  .hero h1{font-size:clamp(28px,4.6vw,44px);font-weight:900;margin:14px 0 8px;line-height:1.25}
+  .hero h1 .g{background:var(--sun);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{color:#cbd5e1;font-size:16px;max-width:850px;margin-top:10px}
+  .hero .meta{margin-top:22px;display:flex;gap:10px;flex-wrap:wrap}
+  .hero .tag{font-size:13px;padding:6px 14px;border:1px solid rgba(148,163,184,.4);border-radius:999px;color:#e2e8f0;background:rgba(148,163,184,.08)}
+  .hero .tag b{color:#fcd34d;font-weight:700}
+  .hero .authors{margin-top:20px;font-size:13px;color:#94a3b8;line-height:1.9}
+  .hero .authors b{color:#cbd5e1}
+
+  main{max-width:1060px;margin:0 auto;padding:0 20px 90px}
+  section{padding-top:56px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{flex:none;width:42px;height:42px;border-radius:12px;background:var(--sun);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;box-shadow:0 8px 20px rgba(245,158,11,.34)}
+  h2{font-size:26px;font-weight:800}
+  .sec-sub{color:var(--muted);font-size:15px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px;margin-bottom:22px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  h3{font-size:19px;font-weight:800;margin:0 0 12px}
+  h4{font-size:15px;font-weight:800;margin:18px 0 8px;color:#9a3412}
+  .muted{color:var(--muted)}
+  code,.code{font-family:var(--mono);font-size:13px;background:#f1f5f9;padding:2px 6px;border-radius:5px}
+
+  .callout{border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;color:#fff;background:linear-gradient(135deg,#7c2d12,#b45309 55%,#6d28d9);box-shadow:0 12px 30px rgba(124,45,18,.3)}
+  .callout .t{font-weight:800;font-size:13.5px;letter-spacing:.1em;opacity:.88;margin-bottom:3px}
+  .callout p{font-size:16px;line-height:1.75}
+  .callout.warn{background:linear-gradient(135deg,#78350f,#b45309 60%,#a16207)}
+  .callout.blue{background:linear-gradient(135deg,#312e81,#4338ca 60%,#0e7490);box-shadow:0 12px 30px rgba(49,46,129,.3)}
+  .callout.green{background:linear-gradient(135deg,#064e3b,#047857 60%,#0e7490);box-shadow:0 12px 30px rgba(6,78,59,.3)}
+
+  .statbar{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:820px){.statbar{grid-template-columns:repeat(2,1fr)}}
+  .statbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .statbox b{display:block;font-size:21px;font-weight:900;background:var(--sun);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.3}
+  .statbox span{font-size:12.5px;color:var(--muted)}
+
+  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:820px){.pillars{grid-template-columns:1fr}}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;border-top:4px solid #f59e0b}
+  .pcard:nth-child(2){border-top-color:#8b5cf6}
+  .pcard:nth-child(3){border-top-color:#06b6d4}
+  .pcard b{display:block;font-size:15.5px;margin-bottom:6px}
+  .pcard p{font-size:14px;color:var(--ink-soft)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.8px;margin:6px 0}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+  th{background:#f1f5f9;font-size:12.3px;letter-spacing:.04em;color:var(--ink-soft);text-transform:uppercase}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:12.2px}
+  @media(max-width:820px){table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}}
+
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:14px 0 4px}
+  .step{flex:1 1 150px;min-width:150px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.3px}
+  .step b{display:block;font-size:13px;margin-bottom:3px}
+  .step span{color:var(--muted);display:block;line-height:1.5}
+  .step.hot{background:linear-gradient(135deg,#fff7ed,#fef3c7);border-color:#fcd34d}
+  .step.hot b{color:#b45309}
+  .flow .arrow{align-self:center;color:#94a3b8;font-size:17px;font-weight:700;flex:none}
+
+  .formula{background:#0b1120;color:#e2e8f0;border-radius:12px;padding:18px 22px;margin:12px 0;font-family:Georgia,"Times New Roman",serif;font-size:15.5px;line-height:2;overflow-x:auto}
+  .formula .hl{color:#fcd34d}
+  .formula .lbl{display:block;font-family:-apple-system,"PingFang SC",sans-serif;font-size:12.5px;font-style:normal;color:#94a3b8;margin-bottom:6px}
+  .snippet{background:#0b1120;color:#e2e8f0;border-radius:12px;padding:16px 20px;font-family:var(--mono);font-size:12.6px;line-height:1.85;overflow-x:auto;margin:10px 0;white-space:pre}
+  .snippet .c{color:#64748b}
+  .snippet .k{color:#c4b5fd}
+  .snippet .s{color:#86efac}
+  .tree{background:#0b1120;color:#e2e8f0;border-radius:14px;padding:20px 22px;font-family:var(--mono);font-size:12.6px;line-height:1.9;overflow-x:auto;white-space:pre}
+  .tree .d{color:#fcd34d;font-weight:700}
+  .tree .c{color:#64748b}
+  .tree .hl{color:#fca5a5}
+  @media(max-width:760px){.tree{font-size:11.2px}}
+
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+  .chip{font-size:12.6px;padding:6px 12px;border-radius:9px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-weight:600;font-family:var(--mono)}
+  .chip.v{background:#f5f3ff;border-color:#ddd6fe;color:#6d28d9}
+  .chip.c{background:#ecfeff;border-color:#a5f3fc;color:#0e7490}
+  .chip.g{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .chip.grey{background:#f1f5f9;border-color:#e2e8f0;color:#475569}
+
+  .timeline{position:relative;padding-left:26px}
+  .timeline:before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--sun)}
+  .tl{position:relative;padding:0 0 16px 6px}
+  .tl:before{content:'';position:absolute;left:-24px;top:7px;width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid #f59e0b}
+  .tl .when{font-size:12px;font-weight:800;color:#b45309;letter-spacing:.04em}
+  .tl .what{font-size:14.5px}
+
+  .quote{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:0 14px 14px 0;padding:18px 22px;font-size:15.5px;color:#78350f;font-weight:600;margin:8px 0 20px}
+
+  footer{border-top:1px solid var(--line);background:#fff}
+  .foot{max-width:1060px;margin:0 auto;padding:28px 20px;color:var(--muted);font-size:13px}
+  .foot a{color:var(--accent);text-decoration:none}
+  .foot .ref{margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">SolarWM 解读</span>
+    <a href="#overview" data-spy>速览</a>
+    <a href="#data" data-spy>数据引擎</a>
+    <a href="#models" data-spy>模型家族</a>
+    <a href="#recipe" data-spy>三阶段配方</a>
+    <a href="#exp" data-spy>实验与结果</a>
+    <a href="#release" data-spy>开源发布</a>
+    <a href="#code" data-spy>代码结构</a>
+    <a href="#take" data-spy>评述</a>
+  </div>
+</nav>
+
+<header>
+  <div class="hero">
+    <div class="kicker">arXiv 2609.02886 · cs.CV · 2026.09</div>
+    <h1>SolarWM：<span class="g">全开放</span>的长时程视频世界模型基础栈</h1>
+    <p class="sub">用<b>可重配置的多源数据引擎</b>把 10 个异构数据集折成 142.6 万条统一契约的片段（约 25.85 TB / 29,272 个分片），再用<b>backbone-native 适配框架</b>在同一套相机条件 / 训练 / 推理接口下实例化 4 个 5B–33B 模型（Wan2.2、LTX-2.5、MiniMax-H3），最后用<b>三阶段配方</b>把双向视频生成器变成少步因果模型——<b>只用 5 秒片段训练，却能做分钟到小时级的实时交互 rollout</b>。</p>
+    <div class="meta">
+      <span class="tag"><b>1,425,694</b> clips</span>
+      <span class="tag"><b>25.85 TB</b> · 29,272 shards</span>
+      <span class="tag"><b>4</b> backbone · 5B–33B</span>
+      <span class="tag"><b>5s</b> 训练 → <b>60min</b> rollout</span>
+      <span class="tag"><b>16 fps / 4 步</b>推理</span>
+      <span class="tag">代码 Apache-2.0</span>
+    </div>
+    <div class="authors">
+      <b>作者</b>：Junchao Huang, Guian Fang, Shengju Qian, Xianghao Kong, Zhuoran Zhao, Wei Huang, Yihua Du, Zixin Zhang, Justin Cui, Yuchao Gu, Yukang Chen, Xinting Hu, Tianyu He, Shaoshuai Shi, Zhuotao Tian, Xin Wang, Mike Zheng Shou, Li Jiang<br>
+      <b>机构</b>：CUHK-SZ · SLAI · NUS · CUHK · HKUST · HKUST-GZ · NVIDIA · UCLA · MSRA
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 速览 -->
+  <section id="overview">
+    <div class="sec-head"><div class="sec-num">①</div><h2>一句话与三根支柱</h2></div>
+    <p class="sec-sub">论文的定位不是「又一个更强的视频生成模型」，而是「让世界模型研究可复现、可比较、可扩展的基础设施」。</p>
+
+    <div class="callout">
+      <div class="t">一句话</div>
+      <p>SolarWM 把三件互相纠缠的事拆开做：<b>数据契约</b>与 <b>mixture 构造</b>解耦，<b>backbone 原生表示</b>与 <b>统一接口</b>解耦，<b>双向适应</b>与 <b>因果化蒸馏</b>解耦。然后把数据、流水线、配方、权重、框架全部开源。</p>
+    </div>
+
+    <div class="pillars">
+      <div class="pcard">
+        <b>① 开放、可重配置的数据基础设施</b>
+        <p>1,425,694 条 canonical clips，来自 <b>10 个源数据集</b>、组织成 <b>14 个可独立寻址的 owner</b>。统一成 frame-aligned 契约：观测、metric 相机几何、caption、质量元数据、选择决策、provenance 六类信息齐备。</p>
+      </div>
+      <div class="pcard">
+        <b>② backbone-native 的可扩展模型家族</b>
+        <p>一套框架支撑 4 个 5B–33B 模型（Wan2.2-5B/14B、LTX-2.5-22B、MiniMax-H3-33B），<b>保留每个 backbone 的原生表示与目标函数</b>，而不是把它们改造成同一种结构。</p>
+      </div>
+      <div class="pcard">
+        <b>③ 统一的三阶段训练配方</b>
+        <p>Bidirectional adaptation → Teacher-Forced AnyFlow 初始化 → DMD via Self-Gradient Forcing。跨异构 backbone 共用同一条路线，<b>不需要额外的 ODE 初始化或一致性蒸馏初始化</b>。</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3>它想解决什么痛点</h3>
+      <table>
+        <thead><tr><th style="width:22%">层面</th><th>异构性体现在哪</th><th>朴素做法的后果</th></tr></thead>
+        <tbody>
+          <tr><td><b>数据侧</b></td><td>各源在 temporal scale、camera 约定与 metric scale、视觉质量、motion 分布、caption 风格上都不同</td><td>朴素混合 → <b>监督不一致</b>：单源上表现好的模型，多源混合训练后反而退化</td></tr>
+          <tr><td><b>模型侧</b></td><td>不同视频生成器的 latent 表示、attention 结构、conditioning 机制各不相同</td><td>要么牺牲预训练能力做统一改造，要么写 backbone-specific 实现 → <b>无法系统比较、无法复现</b></td></tr>
+          <tr><td><b>长时程侧</b></td><td>自回归 rollout 的误差累积、KV cache、运动漂移</td><td>常见对策是长序列微调或 attention sink；而前提是<b>要能有小时级的稳定 rollout</b></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:12px">论文 Table 1 做了一张「代表性交互式世界模型发布矩阵」，对比各家是否放出 weights / 推理代码 / 训练代码 / 数据 / 完整记录 / 数据处理流水线 / 精确配方 / 多 backbone——SolarWM 的卖点正是这一行的「全 ✓」。</p>
+    </div>
+  </section>
+
+  <!-- 数据引擎 -->
+  <section id="data">
+    <div class="sec-head"><div class="sec-num">②</div><h2>数据引擎：数字最密的一节</h2></div>
+    <p class="sec-sub">论文第 5 节。这也是全篇最「硬」的部分——所有可引用的规模数字都在这里。</p>
+
+    <div class="statbar">
+      <div class="statbox"><b>1,425,694</b><span>canonical clips 总数</span></div>
+      <div class="statbox"><b>876,593</b><span>kept（high 471,798 + xhigh 404,795）</span></div>
+      <div class="statbox"><b>549,101</b><span>rejected（保留失败原因）</span></div>
+      <div class="statbox"><b>29,272</b><span>shards · 约 25.85 TB</span></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3>1) 统一样本契约</h3>
+      <p>每个样本表示为 <code>S_i = (V_i, P_i, K_i, C_i, m_i, q_i, π_i)</code>：</p>
+      <div class="chips">
+        <span class="chip">V：视频帧</span>
+        <span class="chip">P ∈ ℝ^(N×4×4)：metric camera-to-world</span>
+        <span class="chip">K ∈ ℝ^(N×4)：逐帧内参 (fx, fy, cx, cy)</span>
+        <span class="chip">C：dense caption</span>
+        <span class="chip">m：来源/媒体元数据</span>
+        <span class="chip">q：完整 metric 记录</span>
+        <span class="chip">π：provenance / lineage</span>
+      </div>
+      <p style="font-size:14.5px;margin-top:8px">关键设计是<b>三个命名空间分离</b>，同一份物理数据可被不同配方复用而不复制：</p>
+      <div class="flow">
+        <div class="step hot"><b>physical corpus</b><span>样本本体 + 全部标注</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>logical recipe</b><span>split、tier policy、source 权重、repeat factor</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>model view</b><span>backbone 专属时间窗或预计算 latent</span></div>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:8px">落到代码里，这套契约是「纯数据契约、零代码耦合」：主仓库与数据引擎子模块之间<b>没有任何 import</b>，只靠三样东西对接——WebDataset member 布局、index schema、以及 latent 侧的 <code>encoder_contract.json</code> 指纹（契约摘要会写进 index 行的 <code>encoder_contract_digest</code>）。</p>
+      <div class="snippet"><span class="c"># WebDataset 每个样本的必需 member（数据引擎侧定义）</span>
+REQUIRED = (<span class="s">"intrinsics.npy"</span>, <span class="s">"meta.json"</span>, <span class="s">"poses.npy"</span>, <span class="s">"prompt.txt"</span>, <span class="s">"video.mp4"</span>)
+optional = gt_depth.npz | action.npy | audio.m4a
+<span class="c"># 时间规格（spec.py）：5s→121f, 60s→1437f, 81f, 160f, 960f</span></div>
+    </div>
+
+    <div class="card">
+      <h3>2) Metric-scale 相机标注（全篇最工程的一段）</h3>
+      <p style="font-size:14.5px">目标是让不同来源的相机轨迹进入<b>同一个 metric 尺度</b>。按源可用几何分路处理：</p>
+      <table>
+        <thead><tr><th style="width:26%">源的几何条件</th><th>处理路径</th></tr></thead>
+        <tbody>
+          <tr><td><b>纯视频（无位姿）</b></td><td><b>Pi3X</b> 给时序一致但尺度模糊的结构 → <b>MoGe-2</b> 给逐帧 metric-depth anchor → 两者 depth 对齐融合 → 送进改造版 <b>VIPE SLAM</b> backend：估 6-DoF 轨迹，并用<b>逐帧可独立优化的 (fx, fy, cx, cy)</b> 做 bundle adjustment；初值来自 <b>GeoCalib</b>（对 zoom / focal-length 漂移是必需的）</td></tr>
+          <tr><td><b>有 GT / COLMAP 位姿</b></td><td>保留原轨迹，只用 Pi3X 把预测结构与轨迹连到 metric gauge：用 robust <b>Umeyama Sim(3)</b> 对齐相机中心，并用<b>残差最低的 80% 帧</b>重新估计</td></tr>
+          <tr><td><b>有 metric depth 无轨迹</b></td><td>同样支持（论文给出该模式）</td></tr>
+        </tbody>
+      </table>
+      <h4>几条容易忽略但很关键的原则</h4>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li><b>不做 corpus-wide 归一化</b>：translation 保持 metric 单位，避免抹掉真实尺度差异。</li>
+        <li><b>质量门 fail-closed</b>：检查几何有限性、正焦距、合理 FOV、焦距一致性 <code>|fx−fy| / (½(fx+fy)+ε)</code>、时序尺度稳定度 <code>std(s)/mean(s)</code>；证据不足直接卡掉，而不是猜。</li>
+        <li><b>相机数组的权威格式是 c2w</b>；<code>logd4</code> 只是「首帧 rebase 之后」的模型侧变换，<b>绝不改写存储张量</b>。</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>3) LTX Clean Plate：把「人 / 车」这类不可控动态去掉</h3>
+      <p style="font-size:14.5px">动态人车既不能用相机解释、又不适合作为可交互内容，于是用 <b>LTX-2.3 Clean Plate IC-LoRA</b>（8 步去噪、strength 1.0）派生 3 组新 owner。输入 1248×704，输出 <b>1280×720 @ 16 fps</b>。规模：</p>
+      <div class="chips">
+        <span class="chip c">SpatialVID-Clean 298,514</span>
+        <span class="chip c">MiraData-Clean 135,224</span>
+        <span class="chip c">Sekai-Walking-Clean 109,248</span>
+        <span class="chip g">合计 543k clean clips</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">重要细节：clean 输出<b>不继承</b>源 clip 的质量——caption、视觉指标、语义指标、相机诊断<b>全部重算</b>；metric scale 由确定性源帧对应关系恢复，有歧义就 fail closed。</p>
+    </div>
+
+    <div class="card">
+      <h3>4) 全量 caption：Kimi-K2.6</h3>
+      <p style="font-size:14.5px"><b>全部 1.43M clips</b> 走同一条 Kimi-K2.6 production pipeline（输入 1 fps、最多 64 帧、最长边 768 px、JPEG qscale 3、无音频；温度 0、seed 0、不做 thinking），输出严格 JSON、恰好 6 个顶层字段：</p>
+      <table>
+        <thead><tr><th style="width:26%">字段</th><th>内容 / 约束</th></tr></thead>
+        <tbody>
+          <tr><td><code>dense_caption</code></td><td>英文单段 <b>60–150 words</b>：只描述持久环境与稳定场景，<b>硬性排除</b>人、动物、动态车辆、动作、相机运动、镜头术语、媒体术语、推测与臆造细节</td></tr>
+          <tr><td><code>vlm_entity_density</code></td><td>∈ {1, 2, 3}</td></tr>
+          <tr><td><code>vlm_quality</code></td><td>∈ [1.0, 5.0]</td></tr>
+          <tr><td><code>reject_flags</code></td><td>8 类：text_heavy、watermark、ui_overlay、blurry、near_static、low_light、nsfw、single_color</td></tr>
+          <tr><td><code>scene_type</code></td><td>real_world / rendered / game / animation / mixed</td></tr>
+          <tr><td><code>scene_transition</code></td><td>label ∈ {none, possible, definite} + count + timestamps_sec + evidence</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:8px">为什么要把「相机运动 / 镜头术语」从 caption 里硬性剔除？——<b>防止文本条件泄露相机控制</b>，让相机只能从几何条件进来，控制链路才干净。最终只有 <code>dense_caption</code> 会被当作 text condition 使用。</p>
+    </div>
+
+    <div class="card">
+      <h3>5) 质量 / 运动指标 → 三档分层</h3>
+      <p style="font-size:14.5px">每个 dataset owner 冻结一份<b>带版本的 policy</b>，把 clip 分成三个互斥标签：<code>xhigh</code>（kept 规则 + 更严的 promotion 规则）、<code>high</code>（只满足 kept 规则）、<code>rejected</code>（连失败原因一起保留）。</p>
+      <div class="chips">
+        <span class="chip grey">camera 完整性（FOV / 焦距散度 / scale CV）</span>
+        <span class="chip grey">饱和度统计</span>
+        <span class="chip">DOVER technical + aesthetic 均值</span>
+        <span class="chip">FFmpeg VMAF Motion</span>
+        <span class="chip">UniMatch / GMFlow 稠密对应强度</span>
+        <span class="chip">PySceneDetect 切点数 + Kimi transition</span>
+        <span class="chip">Kimi quality / entity density / scene type / flags</span>
+      </div>
+      <p style="font-size:14px;margin-top:6px">policy <b>有意做得非对称</b>（每个 owner 阈值不同），避免把每个算出来的指标都变成 gate。几个例子：DL3DV-10s/60s 要求 FOV ∈ [25,120]°、焦距散度 ≤ 0.20、scale CV ≤ 2、Kimi 质量 ≥ 4、DOVER ≥ 0.20；<b>Sekai-Game 反而<em>不设</em>通用相机几何与饱和度 gate</b>（为了保住高运动样本），只要求 UniMatch ≤ 350、DOVER ≥ 0.20；SpatialVID 要求零切点、DOVER ≥ 0.35。未使用的指标也<b>全部入档</b>，方便以后换策略重筛。</p>
+    </div>
+
+    <div class="card">
+      <h3>6) 最终语料：10 个源 → 14 个 owner</h3>
+      <p style="font-size:14.5px">论文写「10 个源数据集」，仓库 README 写「14 个数据集」，两者并不矛盾：DL3DV 被拆成 <b>DL3DV-10s / DL3DV-60s</b> 两个 temporal view，另外从 MiraData、Sekai-Walking、SpatialVID 派生了 3 个 Clean Plate owner，合起来就是 <b>14 个可独立过滤 / 加权 / 选择的 owner</b>。</p>
+      <div class="chips">
+        <span class="chip grey">ABOT-World</span><span class="chip grey">DL3DV</span><span class="chip grey">MiraData</span>
+        <span class="chip grey">RealCam</span><span class="chip grey">SpatialVID</span><span class="chip grey">Sekai-Game</span>
+        <span class="chip grey">Sekai-Walking</span><span class="chip grey">MIND</span><span class="chip grey">MultiCamVideo</span>
+        <span class="chip grey">OmniWorld</span>
+      </div>
+      <h4>各 owner 规模</h4>
+      <table>
+        <thead><tr><th>Owner</th><th>总量</th><th>kept</th></tr></thead>
+        <tbody>
+          <tr><td>SpatialVID</td><td>365,345</td><td>227,995</td></tr>
+          <tr><td>SpatialVID-Clean</td><td>298,514</td><td>206,599</td></tr>
+          <tr><td>MiraData</td><td>140,877</td><td>21,489</td></tr>
+          <tr><td>MiraData-Clean</td><td>135,224</td><td>18,605</td></tr>
+          <tr><td>MultiCamVideo</td><td>123,117</td><td>94,956</td></tr>
+          <tr><td>DL3DV-10s</td><td>120,924</td><td>114,924</td></tr>
+          <tr><td>Sekai-Walking-Clean</td><td>109,248</td><td>80,491</td></tr>
+          <tr><td>RealCam</td><td>45,697</td><td>32,228</td></tr>
+          <tr><td>ABOT-World</td><td>30,966</td><td>30,842</td></tr>
+          <tr><td>Sekai-Walking</td><td>22,990</td><td>19,030</td></tr>
+          <tr><td>OmniWorld</td><td>19,632</td><td>17,325</td></tr>
+          <tr><td>DL3DV-60s</td><td>10,077</td><td>9,643</td></tr>
+          <tr><td>Sekai-Game</td><td>2,550</td><td>1,947</td></tr>
+          <tr><td>MIND</td><td>533</td><td>519</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:14px;margin-top:10px"><b>时长分布</b>：主体落在 <b>153–956 帧</b>（858k clips，其中 kept 553k）；所有 &lt;81 帧的 78k clips <b>全部进了 rejected</b>；≥957 帧的长尾里还有 82k kept。</p>
+    </div>
+
+    <div class="card">
+      <h3>7) Recipe 示例：一份 81 帧短时程配方</h3>
+      <div class="snippet"><span class="c"># 81f short recipe（覆盖 10 个 owner）</span>
+physical training rows : <span class="k">600,320</span>
+source balancing      : ABOT-World / MiraData / Sekai-Game 施加 repeat factor <span class="k">6</span>
+virtual occurrences   : <span class="k">870,210</span> per epoch
+held-out test view    : 1,000 rows
+<span class="c"># 每个 owner 另发独立 100-sample test view（合计 1,400 行）</span>
+<span class="c"># 已发布的 recipe 目录：recipes/clean-81f | clean-153f | clean-158f-h3 | clean-957f</span></div>
+      <p class="muted" style="font-size:13.5px">配方可以重复引用同一物理行而不复制数据（<code>epoch_repeats</code> 生成虚拟 occurrence）——这正是三层分离的直接收益：改 mixture 不用重跑数据处理。</p>
+    </div>
+  </section>
+
+  <!-- 模型家族 -->
+  <section id="models">
+    <div class="sec-head"><div class="sec-num">③</div><h2>模型家族：一套接口，四种原生 backbone</h2></div>
+    <p class="sec-sub">论文第 6 节。核心是「不改造 backbone，只加相机条件」。</p>
+
+    <div class="callout blue">
+      <div class="t">统一相机条件化：Fused-PRoPE</div>
+      <p>把每条相机轨迹转成与视频帧对齐的几何条件（poses + intrinsics + frame alignment + normalization transform），再用 <b>fused-PRoPE</b> 注入：backbone 先用<b>原生 video RoPE</b> 表达 video token 的时空位置 → 相机 poses/intrinsics 决定一组 <b>projective rotations</b>，<b>直接施加在 Q、K、V 三个张量上</b> → 只做<b>一次</b> self-attention → 输出前施加匹配的输出变换 → 回到原生 output projection。<br>
+      也就是说：<b>相机运动由 attention 计算本身引入</b>，不追加额外 condition token、不建独立 camera branch、不多跑一遍 attention。</p>
+    </div>
+
+    <div class="card">
+      <h3>四个模型保留了各自的什么</h3>
+      <table>
+        <thead><tr><th style="width:20%">模型</th><th>保留的原生组件</th><th>图像条件</th><th>音频</th><th>VAE 降采样 (T/S)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>SolarWM-wan2.2-5B</b></td>
+            <td>Wan2.2 TI2V-5B 原生 latent 路径（48 通道 VAE latent），无独立 <code>y</code> 分支</td>
+            <td>无额外条件：首个 latent 作 clean image anchor 并<b>排除出 video loss</b>；其余 latent 作 video target 去噪</td>
+            <td>无</td><td>4× / 16×</td>
+          </tr>
+          <tr>
+            <td><b>SolarWM-wan2.2-14B</b></td>
+            <td>取 Wan2.2 I2V-A14B 的 <b>high-noise expert</b> 初始化，当作覆盖全 timestep 的单一 dense 模型；<b>弃用双 expert 路由与噪声边界</b></td>
+            <td>官方 <code>y</code>：4 通道首帧 mask + 16 通道图像 latent，与 noisy 16 通道 target 拼接；首个 target latent <b>仍为 noisy 且被监督</b></td>
+            <td>无</td><td>4× / 8×</td>
+          </tr>
+          <tr>
+            <td><b>SolarWM-ltx-2.5-22B</b></td>
+            <td>保留 <b>14.74B</b> video path（13.1B video core）+ <b>1.61B Gemma connector 冻结</b>；<b>移除</b> 3.69B audio stream 与 2.58B AV cross-attention</td>
+            <td>原生 first-frame latent（rectified-flow 目标）</td>
+            <td>移除</td><td>8× / 32×</td>
+          </tr>
+          <tr>
+            <td><b>SolarWM-minimax-h3-33B</b></td>
+            <td><b>33B Omni Transformer</b>，保留 multimodal packing（Qwen caption/image rows + 1 帧 VisualVAE anchor + audio rows + target-video rows）</td>
+            <td>Qwen rows + VisualVAE 首图 anchor</td>
+            <td>保留 audio rows（小），填官方 AudioVAE 的静音编码并置 <b>zero audio loss</b></td>
+            <td>(17n+5)→(5n+2) / 16×</td>
+          </tr>
+        </tbody>
+      </table>
+      <h4>三个值得注意的实现细节</h4>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li><b>LTX 路线</b>：相机条件只插进 video self-attention，Qwen conditioner / VisualVAE / AudioVAE 全部冻结——把「加控制」的影响面压到最小。</li>
+        <li><b>MiniMax-H3 路线</b>：相机注入<b>保留预训练 head split</b>——<code>camera_prope_head_dim_start: 96</code> / <code>end: 128</code>，即维度 <code>[0:96)</code> 保持原生内容表示与 MM-RoPE，只有 <code>[96:128)</code> 在 VisualVAE anchor 与 target-video rows 上接受 camera-relative-pose PRoPE。相当于给相机单独留了一段专用维度。</li>
+        <li><b>代码里有三份独立的 PRoPE 实现</b>：Wan 侧是 vendored 自 PRoPE 项目（<code>camera_prope.py</code>，NOTICE 标注 Apache-2.0/MIT 双许可）、LTX 侧 <code>torch_prope.py</code> + <code>camera.py</code>、H3 侧 <code>torch_prope.py</code>（<code>logd4_relative_viewmats</code>）+ <code>camera.py</code>。说明这个「窄口子」实际是各 backbone 分别打磨的。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 三阶段配方 -->
+  <section id="recipe">
+    <div class="sec-head"><div class="sec-num">④</div><h2>三阶段配方：从双向生成器到实时因果世界模型</h2></div>
+    <p class="sec-sub">论文第 4 节。命名有两套：论文正文写 Stage 1/2/3，仓库与 README 写 <b>Stage0.5 / Stage1 / Stage2</b>，是同一件事。</p>
+
+    <div class="card">
+      <div class="flow">
+        <div class="step hot"><b>Stage0.5 · Bidirectional Adaptation</b><span>全窗口双向 attention，学 camera-conditioned 世界数据</span></div>
+        <div class="arrow">→</div>
+        <div class="step hot"><b>Stage1 · Teacher-Forced AnyFlow</b><span>clean history 条件化 noisy target chunk，学到 few-step 流映射</span></div>
+        <div class="arrow">→</div>
+        <div class="step hot"><b>Stage2 · DMD via SGF</b><span>冻结 teacher + 可训练 fake 模型，在 student 自己的 AR rollout 上做分布匹配</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Stage0.5 —— 双向适配</h3>
+      <p style="font-size:14.5px">把预训练视频生成器适配到 camera-conditioned 世界数据，<b>整个训练窗口保持双向 attention</b>，目标函数仍是 backbone 原生的 flow / velocity 匹配：</p>
+      <div class="formula">
+        <span class="lbl">双向适配损失（论文 Eq. 1）</span>
+        L<sub>bid</sub> = 𝔼<sub>z₀, t, ε</sub> <span class="hl">[</span> ‖ f<sub>θ</sub>(z<sub>t</sub>, t, <b>c</b>) − u<sub>t</sub> ‖₂² <span class="hl">]</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">其中 <b>c</b> 汇集 text / image / camera 条件，u<sub>t</sub> 是该 backbone 的原生 flow 或 velocity target。这个 checkpoint 一举两用：既是因果训练的初始化，又是 Stage2 里 DMD 的 <b>frozen 双向 reference（teacher）</b>。</p>
+    </div>
+
+    <div class="card">
+      <h3>Stage1 —— Teacher-Forced AnyFlow 初始化</h3>
+      <p style="font-size:14.5px">把 latent 序列切成有序 block；预测当前 block 时，模型<b>只能看到当前的 noisy state 与干净的 ground-truth history，未来 block 被 mask 掉</b>。训练时采样一对噪声水平 (t, r)：</p>
+      <div class="formula">
+        <span class="lbl">Teacher-Forced AnyFlow 损失（论文 Eq. 2）</span>
+        L<sub>TF-AF</sub> = 𝔼 <span class="hl">[</span> Σ<sub>k</sub> ℓ<sub>AF</sub>( f<sub>φ</sub> ; z<sup>k</sup><sub>t</sub>, t, r, z<sup>&lt;k</sup><sub>0</sub>, <b>c</b> ) <span class="hl">]</span>
+      </div>
+      <p style="font-size:14.5px">ℓ<sub>AF</sub> 监督的是<b>任意两档噪声水平之间的流映射</b>，所以一步就得到 few-step 自回归生成器。机制上：</p>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li><b>clean history 提供稳定条件</b>：teacher forcing 消掉早期误差累积；</li>
+        <li><b>AnyFlow 把模型直接暴露给 few-step 采样实际使用的有限噪声跳变</b>，而不是只学无穷小步长。</li>
+      </ul>
+      <div class="quote">关键收益：因为 AR initializer 从一开始就是 few-step 的，<b>省掉了 Causal Forcing 的 causal ODE 初始化、以及 Causal Forcing++ 的 causal consistency distillation 初始化这两个独立阶段</b>。而且这个阶段只做「短的因果适配」，不是重新学外观与运动，所以收敛很快。</div>
+    </div>
+
+    <div class="card">
+      <h3>Stage2 —— DMD + Self-Gradient Forcing</h3>
+      <p style="font-size:14.5px">因果 student 按<b>与推理完全相同的时间规则</b>在自己的 rollout 上生成轨迹；用 <b>detached rollout-and-replay</b>（Self Gradient Forcing）让梯度能穿过 KV cache 回传。三个角色分工：</p>
+      <div class="flow">
+        <div class="step"><b>frozen 双向 teacher</b><span>估计 real 分布</span></div>
+        <div class="arrow">+</div>
+        <div class="step"><b>可训练 fake 模型</b><span>跟踪 student 不断演化的 rollout 分布，只在生成样本上优化</span></div>
+        <div class="arrow">→</div>
+        <div class="step hot"><b>分布匹配方向</b><span>两者之差给出 DMD 梯度</span></div>
+      </div>
+      <div class="formula">
+        <span class="lbl">DMD 梯度（论文 Eq. 3）</span>
+        ∇<sub>ψ</sub> L<sub>DMD</sub> = 𝔼 <span class="hl">[</span> J<sub>G<sub>ψ</sub></sub><sup>⊤</sup> · w(t) · ( s<sub>fake</sub>(z<sub>t</sub>, t, <b>c</b>) − s<sub>real</sub>(z<sub>t</sub>, t, <b>c</b>) ) <span class="hl">]</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">J 把匹配信号映回 generator 参数，w(t) 控制不同噪声水平上的权重尺度。teacher 固定、fake 跟随的<b>分开优化</b>，既保住稳定的质量参照，又让训练信号跟踪变化的 student 分布。</p>
+    </div>
+
+    <div class="callout green">
+      <div class="t">论文没给的超参，仓库里有</div>
+      <p>论文完全没有报告各阶段的步数、学习率、batch size 与并行配置，但<b>仓库的配置文件把 MiniMax-H3 三阶段全部公开了</b>。下面这张表是直接读 <code>configs/examples/minimax_h3/*.yaml</code> 得到的——这是本页最有价值的一张表。</p>
+    </div>
+
+    <div class="card">
+      <h3>三阶段真实超参（MiniMax-H3，来自仓库配置）</h3>
+      <table>
+        <thead><tr><th style="width:22%">配置项</th><th>Stage0.5</th><th>Stage1</th><th>Stage2</th></tr></thead>
+        <tbody>
+          <tr><td>causal_mode / objective</td><td>bidirectional /<br>flow_matching</td><td>teacher_forcing /<br>anyflow_forward_map:v1_5</td><td>self_gradient_forcing /<br>flow_matching</td></tr>
+          <tr><td>world_size × 序列并行</td><td>256 × 2</td><td>256 × 2</td><td>256 × 4</td></tr>
+          <tr><td>global_batch_size</td><td>128</td><td>128</td><td>64</td></tr>
+          <tr><td>max_steps</td><td>30,000</td><td>30,000</td><td>4,000</td></tr>
+          <tr><td>学习率 / warmup</td><td>1e-4 / 500</td><td>3e-5 / 1000<br>(min_lr_ratio 0.1)</td><td>2e-6（critic 4e-7）/ 0</td></tr>
+          <tr><td>FSDP 分片</td><td>FULL_SHARD</td><td>FULL_SHARD</td><td>HYBRID_SHARD</td></tr>
+          <tr><td>LoRA</td><td colspan="3">rank = alpha = <b>384</b>，target = <code>block_qkvo_ffn</code>，期望命中 312 个线性层 / <b>2,075,394,048 个可训练参数</b></td></tr>
+          <tr><td>阶段特有</td><td><code>video_timestep_shift: 12.0</code></td><td><code>anyflow_gate: 0.25</code>、<code>deltatime_type: r</code>、<code>finite_difference_epsilon: 5.0</code>、<code>diffusion_ratio: 0.5</code>、<code>consistency_ratio: 0.25</code>、<code>weight_type: gaussian</code></td><td><code>critic_updates_per_student: 5</code>、<code>num_denoising_steps: 4</code>、<code>score_min/max_sigma: 0.02/0.98</code>、EMA decay 0.99（自 step 39 起）、<code>max_prior_clean_chunks: 5</code></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:8px">对照：Wan2.2-5B 各阶段 global_batch_size 均为 256，Wan2.2-14B 为 128，LTX-2.5 LoRA rank 同为 384、lr 1e-4、warmup 500。<b>Stage2 的步数（4,000）只有 Stage0.5/1（各 30,000）的约 13%</b>——这就是论文 finding ②「大部分优化量应放在双向阶段」在配置层面的直接体现。</p>
+      <h4>实现里还有硬断言</h4>
+      <p style="font-size:14.5px">H3 的 SGF 窗口有明确的结构约束：<b>50 帧 rollout / 47 帧 supervise / 5 个 chunk / W6</b>（<code>h3_sgf_windows</code> 里是 assert 而非注释）。这类「契约写进断言」的风格在这个仓库里很普遍（还有 <code>validate_stage2_contract</code>、<code>validate_checkpoint_transaction</code>、<code>ensure_disjoint(train, test)</code>）。</p>
+      <h4>哪些路线是合法的？</h4>
+      <p style="font-size:14.5px"><code>config/routes.py</code> 用一个 <code>_SUPPORTED</code> 冻结集合硬编码了 <b>9 条合法路由</b>，非法组合在分配 GPU 之前就会被拒绝：Wan2.2-5B 四条（stage0p5 / stage1-tf-fm / stage1-tf-anyflow-v1_5 / stage2-sgf）、MiniMax-H3 三条、Wan2.2-14B 仅 stage0p5、LTX-2.5 仅 stage0p5(native_rectified_flow)。</p>
+    </div>
+  </section>
+
+  <!-- 实验 -->
+  <section id="exp">
+    <div class="sec-head"><div class="sec-num">⑤</div><h2>实验与结果</h2></div>
+    <p class="sec-sub">论文第 7 节。这里必须先说一句实话：<b>这一节全是定性图，没有定量指标表。</b></p>
+
+    <div class="callout warn">
+      <div class="t">读这篇论文时最需要注意的一点</div>
+      <p>第 7 节 <b>没有 FVD / PSNR / SSIM / CLIP / 相机误差 / 吞吐 的任何数值表，也没有正式的 ablation 表</b>。全文唯一可引用的推理规格是 <b>16 fps 生成 + 4 步采样</b>。所以这篇论文要当作「<b>基础设施与配方论文</b>」来读：说服力主要来自数据规模、契约设计、跨 backbone 一致性，以及仓库里可核对的配置，而不是 benchmark 数字。</p>
+    </div>
+
+    <div class="card">
+      <h3>统一评测协议</h3>
+      <div class="chips">
+        <span class="chip c">16 fps</span><span class="chip c">4 sampling steps</span><span class="chip c">no attention sink</span>
+        <span class="chip">单张图初始化</span><span class="chip">text description + frame-aligned camera trajectory</span>
+        <span class="chip g">scene prompt 全程固定</span><span class="chip g">唯一时变控制 = 相机轨迹</span>
+      </div>
+      <p class="muted" style="font-size:13.5px">协议设计得很克制：固定 prompt、只让相机变——这样看到的变化才能归因于相机控制，而不是文本引导。双向生成产生 10 s clip。</p>
+    </div>
+
+    <div class="card">
+      <h3>四组结果</h3>
+      <table>
+        <thead><tr><th style="width:24%">实验</th><th>设置</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>双向预训练（7.2）</b></td>
+            <td>4 条 backbone 在同一 OOD 协议下评测；首帧由 <b>GPT Image 2 或 Krea</b> 合成，固定 caption 与相机轨迹，覆盖 translation / rotation / mixed 6-DoF</td>
+            <td>共享的数据与相机契约<b>可跨异构生成器一致迁移</b>，同时保住各自的视觉先验</td>
+          </tr>
+          <tr>
+            <td><b>In-domain 验证（7.3.1）</b></td>
+            <td>样本取自 held-out validation pool（同源同流水线，不参与优化）：10 s 第三人称 rollout；以及不间断的 minute-scale rollout，覆盖 real-world / synthetic / game</td>
+            <td>主体外观与空间关系稳定，相机跟随正确，长时间 rollout 视觉连贯</td>
+          </tr>
+          <tr>
+            <td><b>OOD 初始化（7.3.2）</b></td>
+            <td>首帧全部来自 GPT Image 2 / Krea 合成，prompt 刻意覆盖语料罕见条件：风格化插画、超现实几何、非常规材质、戏剧性光照；每张图配多条轨迹（前向 / 侧移 / 转向 / 环绕 / 平移+旋转组合）</td>
+            <td>把「外观鲁棒性」与「控制响应性」两个因素<b>分离</b>开来考察</td>
+          </tr>
+          <tr>
+            <td><b>长视频生成（7.3.3）</b></td>
+            <td><b>不</b>重启首帧、<b>不</b>注入 reference frame、<b>不</b>拼接短片段、<b>不</b>用 attention sink。minute-scale：合成首帧 + 复合轨迹，连续导航 5 个视觉上不同的场景；hour-scale：真实首帧，<b>单次不中断 AR session 跑到 60 分钟端点</b></td>
+            <td>训练只用 5 s 序列，评测无需长序列微调；60 分钟端点仍可辨识且视觉连贯</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>论文自己总结的三条 finding（写在 Introduction 里，替代了 ablation 表）</h3>
+      <div class="pillars">
+        <div class="pcard" style="border-top-color:#f59e0b"><b>① 不需要额外初始化阶段</b><p>不靠专门的 ODE 初始化或一致性蒸馏初始化，也能达到 SOTA。（仓库的 9 条合法路由也印证：从 Stage0.5 直接进 AnyFlow。）</p></div>
+        <div class="pcard" style="border-top-color:#8b5cf6"><b>② 优化量主要花在双向阶段</b><p>因果适配收敛很快，DMD 所需步数更少——配置里 Stage2 只有 4,000 步，而 Stage0.5/1 各 30,000 步。</p></div>
+        <div class="pcard" style="border-top-color:#06b6d4"><b>③ 5 秒训练即可开放长时程</b><p>只用 5 s 序列训练，就能支持分钟–小时级 open-ended rollout，无需长序列微调或 attention sink。</p></div>
+      </div>
+      <p class="muted" style="font-size:13.5px;margin-top:10px"><b>局限</b>：论文 Conclusion <b>没有 limitation 段落</b>，也没有失败案例或定量误差。仅能从若干工程性保守设计中间接看出作者的谨慎：相机证据缺失时 fail closed、clean plate 不继承源质量、scene transition 预测标记为 unverified。</p>
+    </div>
+  </section>
+
+  <!-- 发布物 -->
+  <section id="release">
+    <div class="sec-head"><div class="sec-num">⑥</div><h2>开源发布物（附访问门槛）</h2></div>
+    <p class="sec-sub">「fully open」是这篇论文的核心主张，但具体怎么拿到手，有几个门槛需要注意。</p>
+
+    <div class="card">
+      <h3>模型权重（HuggingFace，均为 <code>gated</code>，需接受条款）</h3>
+      <table>
+        <thead><tr><th style="width:30%">仓库</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>junchaoh-cs/SolarWM-Wan2.2-5B</code></td><td>Wan2.2 TI2V-5B：<b>完整 SolarWM 路线</b>，含 Stage0.5 / Stage1 / Stage2 三个 checkpoint</td></tr>
+          <tr><td><code>junchaoh-cs/SolarWM-H3-33B</code></td><td>MiniMax-H3 33B：子目录含 base / bid-stage0p5-158f / tf-stage1-158f / sgf-stage2-158f 四份</td></tr>
+          <tr><td><code>junchaoh-cs/SolarWM-Wan2.2-14B</code></td><td>Wan2.2 I2V-A14B：base assets + 已发布的 Stage0.5 双向相机 checkpoint</td></tr>
+          <tr><td><code>junchaoh-cs/SolarWM-LTX-22B</code></td><td>LTX-2.5 22B：base assets + Stage0.5 EMA LoRA adapter</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:8px">对照仓库支持矩阵：<b>完整三阶段目前只有 Wan2.2-5B 与 MiniMax-H3</b>；Wan2.2-14B 与 LTX-2.5 是 Stage0.5，其 Stage1/Stage2 标注为 coming soon。quickstart 明确要求先「接受 H3 模型仓库的 access terms」。</p>
+    </div>
+
+    <div class="card">
+      <h3>数据：分四种获取路径</h3>
+      <table>
+        <thead><tr><th style="width:26%">路径</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>预编码 latent</td><td>共 <b>13 个 latent generation</b>，目前<b>只发布了 2 个</b>（<code>wan22-ti2v5b-153f-480p-v1</code>、<code>minimax-h3-158f-768p-nomind-v1</code>），其余 11 个标 Coming soon；在 ModelScope 上单独发布（国际 / 中国两个入口）</td></tr>
+          <tr><td>从标注重建 raw-WDS</td><td><code>SolarWM-Data</code> 仓库含 controls、licenses、recipe/test 索引、小样本 <code>example/</code> 与 Annotation 重建包，但<b>不含</b>完整 raw-WDS payload</td></tr>
+          <tr><td>提交表单申请</td><td>完整 raw-WDS 需走 Google Form 申请，邮件下发下载方式</td></tr>
+          <tr><td>独立测试集</td><td><code>SolarWM-Data_test-set-v1</code>：<b>1,300 clips / 13 个 source view</b>（<b>MIND 被排除</b>），60 个 tar、约 <b>77.4 GB</b>——不申请全量数据也能做对比</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px">数据引擎代码是主仓库的 git submodule（<code>Enderfga/solar-wm-data</code>，当前 commit <code>d1c6e721</code>）：87 个文件 / 65 个 py / 13,578 行，含 47 个处理脚本、<code>vipe_patches/</code> 与自己的 agent 技能说明。</p>
+    </div>
+
+    <div class="card">
+      <h3>⚠️ 许可证有陷阱</h3>
+      <p style="font-size:14.5px">SolarWM 自己的代码是 <b>Apache-2.0</b>，但 README 明确警告：<b>权重与各 backbone 包各有各的许可，并未被 SolarWM 的代码许可重新授权</b>——</p>
+      <ul style="padding-left:20px;font-size:14.5px">
+        <li>LTX-2.5 派生物受 <b>LTX-2.x Community License</b> 约束；</li>
+        <li>MiniMax H3 系 <b>MiniMax H3 Community License</b>，<b>含地域限制</b>；</li>
+        <li>仓库内 vendored 的第三方：Wan 2.2（Apache-2.0，<code>causal_model.py</code> 为修改派生）、PRoPE（MIT，双许可）。</li>
+      </ul>
+      <p class="muted" style="font-size:13.5px">要商用的话，这一步必须逐个去核对 backbone 的社区许可，不能只看仓库根目录那个 Apache-2.0。</p>
+      <h4>发布节奏</h4>
+      <div class="timeline">
+        <div class="tl"><div class="when">2026-09-03</div><div class="what">开源训练与推理代码、数据集、数据流水线、SolarWM-5B 全部训练阶段权重，以及 14B / LTX / H3 的双向权重</div></div>
+        <div class="tl"><div class="when">2026-09-10</div><div class="what">测试集 v1 与 HF 集合更新</div></div>
+        <div class="tl"><div class="when">2026-09-13</div><div class="what">发布 <b>SolarWM-H3（33B）</b>训练与推理代码、权重，以及 Stage0.5 / Stage1 / Stage2 的预编码训练数据</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 代码结构 -->
+  <section id="code">
+    <div class="sec-head"><div class="sec-num">⑦</div><h2>代码仓库结构</h2></div>
+    <p class="sec-sub">仓库 <a href="https://github.com/Junchao-cs/SolarWM">Junchao-cs/SolarWM</a>，HEAD <code>208141b</code>「Release H3 staged training and long-video inference」（2026-09-14）。主仓库约 280 个文件、Python <b>68,440 行</b>。</p>
+
+    <div class="card">
+      <div class="tree"><span class="d">SolarWM/</span>                       <span class="c"># 主仓库 ~280 files · Python 68,440 行</span>
+├── <span class="d">src/solarwm/</span>     <span class="c">52,048 行</span>  <span class="c"># 核心包（下节展开）</span>
+│   └── <span class="d">backends/</span>     <span class="c">113 py / 45,897 行 = src 的 88%</span>
+│       ├── <span class="hl">wan22/</span>       <span class="c">38 files / 22,669 行（最大）</span>
+│       ├── <span class="hl">minimax_h3/</span>  <span class="c">46 files / 12,750 行</span>
+│       └── <span class="hl">ltx25/</span>       <span class="c">27 files / 10,412 行</span>
+├── <span class="d">configs/examples/</span> <span class="c">27 个 YAML · 按 backbone 分四个目录 · 2,697 行</span>
+├── <span class="d">docs/</span>            <span class="c">11 篇：architecture / data-contract / datasets / latent-wds / data-access / quickstart + backends×4</span>
+├── <span class="d">tests/</span>           <span class="c">71 files / 584 个测试函数 / 15,970 行（镜像 src 布局）</span>
+├── <span class="d">environments/</span>    <span class="c">三个<b>互不兼容</b>的 runtime env 构建矩阵</span>
+├── <span class="d">skills/</span>          <span class="c">给 AI agent 用的 SKILL.md（298 行）</span>
+├── <span class="d">tools/</span>           <span class="c">1 个脚本：H3 流式解码数值一致性校验</span>
+├── <span class="d">data-engine/</span>     <span class="c">git submodule → Enderfga/solar-wm-data（65 py / 13,578 行）</span>
+├── <span class="d">assets/</span>          <span class="c">solar_teaser.png（6.9 MB）</span>
+├── <span class="d">.github/workflows/</span> <span class="c">ci.yml（job: cpu-contracts）</span>
+└── <span class="c">README.md  CONTRIBUTING.md  SECURITY.md  LICENSE  NOTICE  pyproject.toml  MANIFEST.in</span></div>
+    </div>
+
+    <div class="card">
+      <h3>核心包 <code>src/solarwm/</code> 的分层</h3>
+      <table>
+        <thead><tr><th style="width:24%">子包 / 文件</th><th>职责与关键符号</th></tr></thead>
+        <tbody>
+          <tr><td><code>cli.py</code></td><td><b>唯一入口</b>（371 行）。子命令：<code>train</code> / <code>infer</code> / <code>preencode</code>（共用 <code>--config</code> 与可重复的 <code>--set k=v</code>）、<code>config resolve|routes</code>、<code>data inspect|warm-cache|materialize-*|plan</code>、<code>environment probe</code></td></tr>
+          <tr><td><code>config/</code></td><td><code>routes.py</code>：<code>Route(family, stage, causal_mode, objective, variant)</code> + <code>_SUPPORTED</code> 冻结集合（9 条合法路由）；<code>loader.py</code>：严格 YAML、<code>${VAR}</code> 展开、拒绝 <code>token/secret/password/api_key/access_token</code> 五个键名</td></tr>
+          <tr><td><code>data/</code></td><td><code>index.py</code>（IndexRow / shard 身份 / 路径校验）、<code>sampling.py</code>（CanonicalSampler / SamplePlan / plan_fingerprint）、<code>transport.py</code>（ShardResolver 协议 / LocalResolver / GCS REST）、<code>archive.py</code>（TarShardReader）、<code>camera.py</code>（<b>CameraGuards</b>、c2w↔w2c 变换、causal 像素索引）、<code>prefetch.py</code></td></tr>
+          <tr><td><code>training/</code></td><td><code>engine.py</code>（TrainingEngine + 运行时协议 + StepPolicy）、<code>optim.py</code>（<b>FP32MasterAdamW</b>）、<code>ema.py</code>（ShardedEMA）、<code>schedule.py</code>（warmup-cosine）、<code>sgf.py</code>（<code>compute_sgf_kl_gradient</code> / <code>sgf_student_loss</code>）、<code>anyflow.py</code>（时间对采样、中心差分导数、高斯时间权重）</td></tr>
+          <tr><td><code>inference/</code></td><td><code>engine.py</code>（InferenceEngine + Adapter 协议 + <code>run_validation</code>）、<code>validation_plan.py</code>、<code>comparison.py</code>（<code>encode_compare_mp4</code>）</td></tr>
+          <tr><td><code>preencode/</code></td><td><code>contracts.py</code>（EncoderContract / TensorSpec / <code>validate_encoded_tensors</code>）、<code>shards.py</code>（write_shard / write_index）</td></tr>
+          <tr><td><code>backends/registry.py</code></td><td>BackendSpec + Backend 协议 + 惰性导入的 <code>load_backend()</code></td></tr>
+        </tbody>
+      </table>
+      <h4>四套 backbone 实现的入口类</h4>
+      <table>
+        <thead><tr><th style="width:20%">Backend</th><th>关键类</th></tr></thead>
+        <tbody>
+          <tr><td><b>wan22</b></td><td><code>Wan22Backend</code> · <code>WanModel</code>（vendored 派生）· <code>CausalWanModel</code> / <code>CausalPropeSelfAttention</code> / <code>CausalWanAttentionBlock</code> · <code>Wan2_2_VAE</code></td></tr>
+          <tr><td><b>ltx25</b></td><td><code>LTX25Backend</code> · <code>SolarLTX25VideoModel</code> / <code>...VideoTransformerBlock</code> / <code>...VideoSelfAttention</code> · <code>LTX25VideoBackbone</code> · <code>LoRARuntime</code>；另有 <code>official.py</code> 对接官方 <code>ltx_core</code></td></tr>
+          <tr><td><b>minimax_h3</b></td><td><code>MiniMaxH3Backend</code> · <code>SolarMiniMaxH3Transformer3DModel</code> · <code>SolarMiniMaxH3AttnProcessor</code> · <code>H3AttentionControl</code></td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px;margin-top:8px">三阶段的实现也按 backbone 分开：H3 侧是 <code>H3Stage0p5Core</code> → <code>H3Stage1Core</code>（继承前者）→ <code>H3SGFCore</code>；Wan 侧对应 <code>stage0p5.py</code> / <code>stage1_anyflow.py</code> / <code>stage2.py</code>。</p>
+    </div>
+
+    <div class="card">
+      <h3>架构铁律（来自 <code>docs/architecture.md</code>）</h3>
+      <div class="callout blue" style="margin:0">
+        <div class="t">四大契约</div>
+        <p><b>config / data / backends / execution</b> 四个契约面。<b>core 永不 import 具体 backbone，backend 之间禁止互相 import</b>；数据集读取器<b>不得</b>从类名或数据集名推断相机归一化。这套约束解释了为什么 add-a-backbone 是「加一个目录」而不是「改框架」。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>怎么跑（文档里的真实命令）</h3>
+      <div class="snippet"><span class="c"># Stage0.5 训练（H3，8 卡）</span>
+torchrun --standalone --nproc-per-node=8 -m solarwm train \
+  --config configs/examples/minimax_h3/stage0p5-158f-lora384-sp2.yaml \
+  --set distributed.world_size=8 \
+  --set train.global_batch_size=4 \
+  --set model.checkpoint_path=/path/to/SolarWM-h3-33B-base \
+  --set data.index_root=/path/to/SolarWM-Data/releases-v1 \
+  --set runtime.output_dir=/path/to/output/h3-stage0p5-158f
+
+<span class="c"># Stage1：多一个 student 初始化指针</span>
+  --set checkpoint.initialization.student.path="$H3_STAGE0P5_INIT"
+<span class="c"># Stage2：student / teacher / critic 三个指针</span>
+  --set checkpoint.initialization.{student,teacher,critic}.path=...
+<span class="c"># 续训：直接吃上一次的 resolved-config.json</span>
+  --config "$PREV/run/resolved-config.json" --set checkpoint.resume_from="$PREV/checkpoint_model_000200"
+
+<span class="c"># 推理 / 全长推理 / 预编码 / 配置自检</span>
+-m solarwm infer     --config .../infer-stage2-158f-sp4.yaml --set checkpoint.weight_source=ema
+-m solarwm infer     --config .../infer-stage2-source-length-sp8.yaml   <span class="c"># >960 帧加 --set inference.stream_decode=true</span>
+-m solarwm preencode --config .../preencode-158f.yaml
+    solarwm config resolve | config routes | environment probe | data warm-cache</div>
+      <p class="muted" style="font-size:13.5px">多机训练用 <code>torchrun --nnodes=N --node-rank=R --rdzv-backend=c10d --rdzv-endpoint=$MASTER_ADDR:$MASTER_PORT</code>；H3 文档给出的示例是 <code>NNODES=32</code>（对应配置里的 world_size 256）。</p>
+    </div>
+
+    <div class="card">
+      <h3>工程成熟度（明显高于同类研究仓库）</h3>
+      <div class="pillars">
+        <div class="pcard" style="border-top-color:#06b6d4">
+          <b>CI 不只是跑单测</b>
+          <p><code>ci.yml</code>（job <code>cpu-contracts</code>）在 Py3.10/3.11/3.12 矩阵下跑 ruff + pytest，然后<b>遍历全部示例配置逐个 <code>config resolve</code></b> 断言可解析，最后构建 wheel/sdist 并断言产物内容与可安装性。</p>
+        </div>
+        <div class="pcard" style="border-top-color:#f59e0b">
+          <b>可复现性被当作 public API</b>
+          <p><code>CONTRIBUTING.md</code> 要求：改动样本顺序、相机约定、张量 shape/dtype、目标函数数学、checkpoint schema 或 validation 生成，<b>必须</b>附带聚焦的契约测试；新 stage 要有 config/data/objective/checkpoint/inference/validation/runtime <b>七类测试</b>才能注册为 supported route。</p>
+        </div>
+        <div class="pcard" style="border-top-color:#8b5cf6">
+          <b>测试与代码 1:1 镜像</b>
+          <p>71 个测试文件、584 个测试函数，布局镜像 <code>src/</code>。分布偏重 backbone（wan22 19 文件/222 测试）与 data contract，通用 training/inference 引擎测试相对薄。</p>
+        </div>
+      </div>
+      <h4>依赖与环境：极轻的 core，极重且互斥的 extras</h4>
+      <p style="font-size:14.5px">必需依赖只有 <b>numpy + PyYAML</b>，torch 全在 optional extras 里。但三个 backbone 的运行时<b>必须分开建环境</b>（文档原文：Do not install these three stacks into one environment）：</p>
+      <table>
+        <thead><tr><th style="width:20%">环境</th><th>Python / torch / CUDA</th><th>其它关键版本</th></tr></thead>
+        <tbody>
+          <tr><td><b>Wan</b></td><td>3.10 / torch 2.5.1 / CUDA 12.4</td><td>diffusers 0.38.0、flash-attn 2.8.3、transformers 5.12.1、peft 0.20.0</td></tr>
+          <tr><td><b>LTX</b></td><td>3.12 / torch 2.9.1 / CUDA 12.8</td><td>官方 LTX-2 tag <code>v1.2.0</code>（ltx-core / ltx-pipelines / ltx-trainer）</td></tr>
+          <tr><td><b>H3</b></td><td>3.10 / torch 2.6.0 / CUDA 12.4</td><td>flash-attn 2.8.3、diffusers 0.40.0、imageio 2.37.4</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:13.5px">没有 Dockerfile，只有 <code>environments/README.md</code> 里的逐条命令。<b>这是复现路上的主要摩擦点</b>：想跑通两条以上 backbone，你得维护多个 venv 和多套 CUDA。</p>
+      <h4>还有个少见的细节：给 AI agent 的说明书</h4>
+      <p style="font-size:14.5px"><code>skills/solar-training-ops/SKILL.md</code>（298 行）是一份写给人/agent 的训练运维技能说明，含 7 条「backbone × stage 到底在学什么」的对照表、FM / AnyFlow / DMD-SGF 的术语精确定义（例如 H3 的 FM 用反向时间坐标 <code>x_t = t·x0 + (1−t)·ε</code>，区别于 Wan/LTX 的 <code>x_σ = (1−σ)·x0 + σ·ε</code>），以及一条很实用的 agent 行为约束：<b>「配置文件名是描述性的，不是路线或运行时状态的证据」</b>——必须先 <code>config resolve</code> 再分配 GPU。数据引擎侧还有一份对偶的 <code>solarwm-data-pipeline</code> 技能。</p>
+    </div>
+  </section>
+
+  <!-- 评述 -->
+  <section id="take">
+    <div class="sec-head"><div class="sec-num">⑧</div><h2>几点观察与评述</h2></div>
+    <p class="sec-sub">以下是基于论文与代码通读的判断，不是论文原文结论。</p>
+
+    <div class="card">
+      <h3>值得肯定的地方</h3>
+      <ul style="padding-left:20px;font-size:14.6px">
+        <li><b>把「可复现性」当作一等公民来做。</b>多数世界模型论文只放权重与 demo，SolarWM 放的是「processed corpus + 选择记录 + 精确 recipe + 多 backbone 框架」。数据契约专门为 provenance 留字段、rejected 样本连失败原因都保留、Tier 策略带版本冻结——这些都是为了让别人能重跑出同样的 mixture。</li>
+        <li><b>论文缺的超参，仓库补齐了。</b>论文没给学习率、步数、batch size、并行度，但配置文件把三阶段的全部超参都摆了出来（甚至包括 Stage2 的 4,000 步 vs 前两阶段各 30,000 步这种最能说明问题的对比）。对想复现的人来说，<b>配置的可读性比论文正文更重要</b>，这一点他们做对了。</li>
+        <li><b>「backbone-native」是比「统一改造」更聪明的路线。</b>保留 Wan2.2 的 latent 路径、LTX 的 rectified-flow 约定、H3 的 multimodal packing 与 head split，只把相机控制从一个精心设计的窄口子（fused-PRoPE）注入。预训练能力不掉，又能横向比较四个模型。</li>
+        <li><b>工程纪律罕见地强。</b>core 不 import backbone、backend 互不 import、CI 逐个 resolve 所有配置并校验打包产物、把可复现性契约写进 CONTRIBUTING 作为 public API、非法 stage 组合在分配 GPU 前就被拒绝——这套东西在学术仓库里属于上乘。</li>
+        <li><b>数据的工程细节经得起看。</b>相机标注分三路处理、metric 尺度不强归一、clean plate 不继承源质量、caption 硬性剔除相机术语——每一条都能看出是对「什么会让控制信号变脏」有过真实踩坑。</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>需要保留怀疑的地方</h3>
+      <ul style="padding-left:20px;font-size:14.6px">
+        <li><b>实验部分没有数字。</b>没有 FVD / 相机误差 / 用户研究，也没有消融与训练成本。既然论文主张「同一框架支撑四个 backbone 并可系统比较」，那么一张跨 backbone 的定量对比表恰恰是最该有的东西。目前只能靠质化图与「受控协议」支撑结论。</li>
+        <li><b>「实时交互」缺量化。</b>16 fps / 4 步是生成规格，但没有端到端延迟、吞吐、显存占用——而这些恰恰是「交互」的真正门槛。（4 步 + 16 fps 的组合也意味着必须靠 KV cache 与流水线并行把延迟压下去，但论文没有给出这条链路的数字。）</li>
+        <li><b>小时级 rollout 的稳定性证据是「单个 60 分钟样例」</b>，没有多案例统计，也没有漂移度量。对世界模型而言，长时程漂移的分布往往比最好样例更重要。</li>
+        <li><b>开放度有三层门槛。</b>代码 Apache-2.0 很干净，但权重全部 gated、完整 raw-WDS 要走表单申请、13 个 latent generation 只发布了 2 个。宣称的「fully open」在落地时要打折看。</li>
+        <li><b>许可证是真陷阱。</b>LTX-2.x 与 MiniMax H3 的社区许可（后者含地域限制）独立于仓库的 Apache-2.0，商用前必须逐个核对。</li>
+        <li><b>规模数字要自己核对口径。</b>「10 datasets」与「14 datasets」的差异源于 owner 划分，不看第 5 节细节容易误引。</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>对做推理与部署的人意味着什么</h3>
+      <p style="font-size:14.6px">这一条对你在做的工作（MiniMax-H3 / Wan2.2 在 vLLM-Omni 与昇腾 NPU 上的部署）特别直接：</p>
+      <ul style="padding-left:20px;font-size:14.6px;margin-top:8px">
+        <li><b>它把 MiniMax-H3 与 Wan2.2 变成了「因果化 + 相机可控」的形态</b>，而且是 4 步、16 fps 的少步模型。少步意味着单位时间去噪计算量大幅下降，正好是推理侧最关心的指标。</li>
+        <li><b>长时程 rollout 靠的是 KV cache 复用与自回归状态维护</b>——Stage2 的 SGF 明确处理「梯度穿过 KV cache」，代码里还有 <code>H3RawKVCache</code> 与专门的 SGF attention。这与推理引擎里的 cache 管理、连续批处理、状态复用完全是同一套工程关注点。</li>
+        <li><b>三套独立环境是明确的部署信号</b>：三个 backbone 的 torch / CUDA / diffusers 版本互相冲突。若要在同一集群同时支持多条 backbone，容器化(多镜像)几乎是必需的——他们没给 Dockerfile，这一步得自己做。</li>
+        <li><b>权重是 gated 的</b>，需要先接受 H3 仓库的访问条款；数据集还要走表单。想复现的团队要预留这一步时间。</li>
+      </ul>
+    </div>
+
+    <div class="quote">一句话总结：SolarWM 的贡献重心不在「刷新某个 benchmark」，而在<b>把长时程视频世界模型这条链路（数据 → 相机控制 → 因果化 → 实时推理）完整地开源并标准化</b>。论文的实验部分偏弱，但仓库的配置、契约与 CI 补足了很多论文没说的事。如果你想在自己的 backbone 上复现「双向 → 少步因果 → 长时程交互」这条路线，这目前是最完整的公开参考实现。</div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot">
+    <b>来源</b>
+    <div class="ref">· 论文：<a href="https://arxiv.org/abs/2609.02886">arXiv:2609.02886</a>（<i>SolarWM: Open Data and Scalable Training for Long-Horizon Video World Models</i>，cs.CV，2026.09）· <a href="https://arxiv.org/html/2609.02886v1">HTML 全文</a></div>
+    <div class="ref">· 代码：<a href="https://github.com/Junchao-cs/SolarWM">github.com/Junchao-cs/SolarWM</a>（HEAD <code>208141b</code>）· 数据引擎：<a href="https://github.com/Enderfga/solar-wm-data">Enderfga/solar-wm-data</a>（submodule <code>d1c6e721</code>）</div>
+    <div class="ref">· 项目页：<a href="https://junchao-cs.github.io/SolarWM-Web/">junchao-cs.github.io/SolarWM-Web</a> · 权重与数据：<a href="https://huggingface.co/collections/junchaoh-cs/solarwm">HF 集合 junchaoh-cs/solarwm</a> · 数据集另见 <a href="https://modelscope.cn/datasets/junchao2003/SolarWM-Data">ModelScope</a></div>
+    <div class="ref" style="margin-top:10px">※ 本页依据论文 v1（HTML 全文）与仓库 <code>main</code> 分支（含 data-engine 子模块）通读整理，快照 2026-09-14。论文与仓库仍在快速演进（H3 支持是 9/13 才加入的），细节请以官方来源为准。</div>
+  </div>
+</footer>
+
+<script>
+  const bar = document.getElementById('progress');
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  }, {passive:true});
+
+  const links = document.querySelectorAll('nav a[data-spy]');
+  const map = {};
+  links.forEach(a => map[a.getAttribute('href').slice(1)] = a);
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(a => a.classList.remove('active'));
+        (map[e.target.id] || {classList:{add(){}}}).classList.add('active');
+      }
+    });
+  }, {rootMargin:'-30% 0px -60% 0px'});
+  document.querySelectorAll('main section[id]').forEach(s => obs.observe(s));
+</script>
+
+</body>
+</html>
